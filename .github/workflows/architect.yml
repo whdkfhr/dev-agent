@@ -1,0 +1,45 @@
+name: Architect Agent
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  architect:
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'design'
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install anthropic
+
+      - name: Run Architect Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: python .github/scripts/run_architect.py
+
+      - name: Commit DESIGN document
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/design/
+          git diff --staged --quiet || git commit -m "docs: generate DESIGN-${{ github.event.issue.number }} by Architect Agent [skip ci]"
+          git push
+
+      - name: Add implement label to trigger Implementer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh issue edit ${{ github.event.issue.number }} --add-label "implement"
