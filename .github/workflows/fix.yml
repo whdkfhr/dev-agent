@@ -1,0 +1,142 @@
+name: Fix Agent
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'fixing'
+
+    steps:
+      - name: Checkout with all branches
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve TASK ID and feature branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TASK_ID=$(printf '%03d' ${{ github.event.issue.number }})
+
+          # Find open PR for this task
+          PR_NUMBER=$(gh pr list \
+            --search "TASK-${TASK_ID}" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "ERROR: No open PR found for TASK-${TASK_ID}. Cannot apply fix."
+            exit 1
+          fi
+
+          PR_BRANCH=$(gh pr view $PR_NUMBER --json headRefName --jq '.headRefName')
+
+          # Checkout the feature branch (code to be fixed)
+          git checkout $PR_BRANCH
+
+          # Determine retry number from labels
+          RETRY_N=$(gh issue view ${{ github.event.issue.number }} \
+            --json labels \
+            --jq '[.labels[].name | select(startswith("retry_"))] | last | ltrimstr("retry_")')
+
+          echo "TASK_ID=${TASK_ID}" >> $GITHUB_ENV
+          echo "PR_NUMBER=${PR_NUMBER}" >> $GITHUB_ENV
+          echo "PR_BRANCH=${PR_BRANCH}" >> $GITHUB_ENV
+          echo "RETRY_N=${RETRY_N}" >> $GITHUB_ENV
+
+      - name: Get current code diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr diff ${{ env.PR_NUMBER }} | head -c 6000 > /tmp/current_diff.txt
+
+      - name: Call Claude — Fix Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          TASK_FILE="docs/tasks/TASK-${{ env.TASK_ID }}.md"
+          DESIGN_FILE="docs/design/DESIGN-${{ env.TASK_ID }}.md"
+          FIX_ANALYSIS="docs/fixes/FIX-ANALYSIS-${{ env.TASK_ID }}-retry${{ env.RETRY_N }}.md"
+
+          if [ ! -f "$FIX_ANALYSIS" ]; then
+            echo "ERROR: ${FIX_ANALYSIS} not found. Run Failure Analyzer first."
+            exit 1
+          fi
+
+          SYSTEM=$(jq -Rs . < .claude/agents/fix-agent.md)
+
+          TASK_CONTENT=$([ -f "$TASK_FILE" ] && cat "$TASK_FILE" || echo "(not found)")
+          DESIGN_CONTENT=$([ -f "$DESIGN_FILE" ] && cat "$DESIGN_FILE" || echo "(not found)")
+          FIX_ANALYSIS_CONTENT=$(cat "$FIX_ANALYSIS")
+          DIFF_CONTENT=$(cat /tmp/current_diff.txt)
+
+          USER_MSG=$(jq -n \
+            --arg task "$TASK_CONTENT" \
+            --arg design "$DESIGN_CONTENT" \
+            --arg analysis "$FIX_ANALYSIS_CONTENT" \
+            --arg diff "$DIFF_CONTENT" \
+            '"## TASK\n" + $task + "\n\n## DESIGN\n" + $design + "\n\n## Fix Analysis\n" + $analysis + "\n\n## Current Code (PR Diff)\n" + $diff')
+
+          curl -sf https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "{
+              \"model\": \"claude-sonnet-4-6\",
+              \"max_tokens\": 8000,
+              \"system\": $SYSTEM,
+              \"messages\": [{\"role\": \"user\", \"content\": $USER_MSG}]
+            }" | jq -r '.content[0].text' > /tmp/fix_output.txt
+
+      - name: Apply patch (parse and write fixed files)
+        run: |
+          python3 << 'PYEOF'
+          import re, os
+
+          with open('/tmp/fix_output.txt') as f:
+              text = f.read()
+
+          pattern = r'--- FILE: (.+?) ---\n(.*?)--- END FILE ---'
+          files = re.findall(pattern, text, re.DOTALL)
+
+          if not files:
+              print('WARNING: No file blocks found in Fix Agent output.')
+              with open('/tmp/fix_output.txt', 'r') as f:
+                  print(f.read()[:500])
+          else:
+              for path, content in files:
+                  path = path.strip()
+                  os.makedirs(os.path.dirname(path), exist_ok=True)
+                  with open(path, 'w') as f:
+                      f.write(content.strip() + '\n')
+                  print(f'Patched: {path}')
+          PYEOF
+
+      - name: Commit and push patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/
+          git diff --staged --quiet || \
+            git commit -m "fix: patch TASK-${{ env.TASK_ID }} retry-${{ env.RETRY_N }} by Fix Agent [skip ci]"
+          git push origin ${{ env.PR_BRANCH }}
+
+      - name: Remove fixing label (reset for next review cycle)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ github.event.issue.number }} --remove-label "fixing"
+          gh issue edit ${{ github.event.issue.number }} --remove-label "review_failed"
+
+          # PR push will trigger reviewer.yml automatically (pull_request: synchronize)
+          gh pr comment ${{ env.PR_NUMBER }} \
+            --body "Fix Agent applied patch (Retry ${{ env.RETRY_N }}/3). Reviewer re-running..."

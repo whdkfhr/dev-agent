@@ -1,0 +1,131 @@
+name: Failure Analyzer Agent
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'review_failed'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check retry limit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Count existing retry_N labels on this issue
+          RETRY_COUNT=$(gh issue view ${{ github.event.issue.number }} \
+            --json labels \
+            --jq '[.labels[].name | select(startswith("retry_"))] | length')
+
+          if [ "$RETRY_COUNT" -ge 3 ]; then
+            echo "MAX RETRY (3) reached. Stopping Self-Healing loop."
+            gh issue edit ${{ github.event.issue.number }} --add-label "fix_failed"
+            gh issue comment ${{ github.event.issue.number }} \
+              --body "## Self-Healing Loop Exhausted
+
+            자동 수정 루프가 3회 시도 후 실패했습니다.
+
+            수동 개입이 필요합니다.
+
+            - TASK: docs/tasks/TASK-$(printf '%03d' ${{ github.event.issue.number }}).md
+            - Fix 분석 기록: docs/fixes/"
+            exit 0
+          fi
+
+          NEXT_RETRY=$((RETRY_COUNT + 1))
+          TASK_ID=$(printf '%03d' ${{ github.event.issue.number }})
+          echo "RETRY_COUNT=${RETRY_COUNT}" >> $GITHUB_ENV
+          echo "NEXT_RETRY=${NEXT_RETRY}" >> $GITHUB_ENV
+          echo "TASK_ID=${TASK_ID}" >> $GITHUB_ENV
+
+      - name: Get reviewer report and PR diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find open PR linked to this issue
+          PR_NUMBER=$(gh pr list \
+            --search "TASK-${{ env.TASK_ID }}" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$PR_NUMBER" ]; then
+            # Get latest Reviewer Agent Report from PR comments
+            gh pr view $PR_NUMBER --json comments \
+              --jq '[.comments[] | select(.body | contains("Reviewer Agent Report"))] | last | .body // "(no review found)"' \
+              > /tmp/reviewer_report.txt
+
+            # Get current code diff
+            gh pr diff $PR_NUMBER | head -c 6000 > /tmp/pr_diff.txt
+
+            echo "PR_NUMBER=${PR_NUMBER}" >> $GITHUB_ENV
+          else
+            echo "(no linked PR found)" > /tmp/reviewer_report.txt
+            echo "" > /tmp/pr_diff.txt
+          fi
+
+      - name: Call Claude — Failure Analyzer
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          TASK_FILE="docs/tasks/TASK-${{ env.TASK_ID }}.md"
+          DESIGN_FILE="docs/design/DESIGN-${{ env.TASK_ID }}.md"
+
+          SYSTEM=$(jq -Rs . < .claude/agents/failure-analyzer.md)
+
+          TASK_CONTENT=$([ -f "$TASK_FILE" ] && cat "$TASK_FILE" || echo "(not found)")
+          DESIGN_CONTENT=$([ -f "$DESIGN_FILE" ] && cat "$DESIGN_FILE" || echo "(not found)")
+          REVIEW_CONTENT=$(cat /tmp/reviewer_report.txt)
+          DIFF_CONTENT=$(cat /tmp/pr_diff.txt)
+
+          USER_MSG=$(jq -n \
+            --arg review "$REVIEW_CONTENT" \
+            --arg task "$TASK_CONTENT" \
+            --arg design "$DESIGN_CONTENT" \
+            --arg diff "$DIFF_CONTENT" \
+            --arg retry "Retry ${{ env.NEXT_RETRY }} / 3" \
+            '"## Reviewer Report\n" + $review + "\n\n## TASK\n" + $task + "\n\n## DESIGN\n" + $design + "\n\n## Current Code (PR Diff)\n" + $diff + "\n\n## Context\n" + $retry')
+
+          curl -sf https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "{
+              \"model\": \"claude-sonnet-4-6\",
+              \"max_tokens\": 4000,
+              \"system\": $SYSTEM,
+              \"messages\": [{\"role\": \"user\", \"content\": $USER_MSG}]
+            }" | jq -r '.content[0].text' > /tmp/fix_analysis.txt
+
+      - name: Save Fix Analysis
+        run: |
+          mkdir -p docs/fixes
+          cp /tmp/fix_analysis.txt \
+            "docs/fixes/FIX-ANALYSIS-${{ env.TASK_ID }}-retry${{ env.NEXT_RETRY }}.md"
+
+      - name: Commit Fix Analysis
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/fixes/
+          git diff --staged --quiet || \
+            git commit -m "docs: FIX-ANALYSIS-${{ env.TASK_ID }} retry-${{ env.NEXT_RETRY }} [skip ci]"
+          git push
+
+      - name: Trigger Fix Agent
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ github.event.issue.number }} \
+            --add-label "fixing" \
+            --add-label "retry_${{ env.NEXT_RETRY }}"

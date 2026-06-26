@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  issues: write
 
 jobs:
   reviewer:
@@ -86,4 +87,14 @@ jobs:
           else
             gh pr review ${{ github.event.pull_request.number }} --request-changes \
               --body "Reviewer Agent: REJECTED — see review comment for details"
+
+            # Trigger Self-Healing: add review_failed label to linked issue
+            ISSUE_NUMBER=$(gh pr view ${{ github.event.pull_request.number }} \
+              --json closingIssuesReferences \
+              --jq '.closingIssuesReferences[0].number // empty')
+
+            if [ -n "$ISSUE_NUMBER" ]; then
+              gh issue edit $ISSUE_NUMBER --add-label "review_failed"
+              echo "Self-Healing triggered: review_failed label added to issue #${ISSUE_NUMBER}"
+            fi
           fi
