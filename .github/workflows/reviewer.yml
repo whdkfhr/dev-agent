@@ -4,42 +4,86 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   reviewer:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: pip install anthropic
-
       - name: Get PR diff
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr diff ${{ github.event.pull_request.number }} > /tmp/pr_diff.txt
+          gh pr diff ${{ github.event.pull_request.number }} | head -c 8000 > /tmp/pr_diff.txt
 
-      - name: Run Reviewer Agent
+      - name: Resolve TASK and DESIGN from PR title
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          # Extract padded issue number from title format: "feat: TASK-001 - ..."
+          TASK_ID=$(echo "$PR_TITLE" | grep -oP 'TASK-\K\d+' | head -1)
+          if [ -z "$TASK_ID" ]; then
+            echo "WARN: Could not extract TASK ID from PR title. Proceeding without task context."
+            TASK_ID="000"
+          fi
+          TASK_ID=$(printf '%03d' $TASK_ID)
+          echo "TASK_ID=${TASK_ID}" >> $GITHUB_ENV
+
+      - name: Call Claude — Reviewer
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: python .github/scripts/run_reviewer.py
+        run: |
+          TASK_FILE="docs/tasks/TASK-${{ env.TASK_ID }}.md"
+          DESIGN_FILE="docs/design/DESIGN-${{ env.TASK_ID }}.md"
+
+          # Build context: reviewer prompt + TASK + DESIGN + PR diff
+          SYSTEM=$(jq -Rs . < .claude/agents/reviewer.md)
+
+          TASK_CONTENT=$([ -f "$TASK_FILE" ] && cat "$TASK_FILE" || echo "(TASK not found)")
+          DESIGN_CONTENT=$([ -f "$DESIGN_FILE" ] && cat "$DESIGN_FILE" || echo "(DESIGN not found)")
+          DIFF_CONTENT=$(cat /tmp/pr_diff.txt)
+
+          USER_MSG=$(jq -n \
+            --arg pr "PR: $PR_TITLE" \
+            --arg task "$TASK_CONTENT" \
+            --arg design "$DESIGN_CONTENT" \
+            --arg diff "$DIFF_CONTENT" \
+            '$pr + "\n\n## TASK\n" + $task + "\n\n## DESIGN\n" + $design + "\n\n## PR Diff\n" + $diff')
+
+          curl -sf https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "{
+              \"model\": \"claude-sonnet-4-6\",
+              \"max_tokens\": 4000,
+              \"system\": $SYSTEM,
+              \"messages\": [{\"role\": \"user\", \"content\": $USER_MSG}]
+            }" | jq -r '.content[0].text' > /tmp/review_result.txt
 
       - name: Post review comment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr comment ${{ github.event.pull_request.number }} \
-            --body-file /tmp/review_result.md
+            --body "## Reviewer Agent Report
+
+          $(cat /tmp/review_result.txt)"
+
+      - name: Approve or Request Changes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if grep -q "^APPROVED" /tmp/review_result.txt; then
+            gh pr review ${{ github.event.pull_request.number }} --approve \
+              --body "Reviewer Agent: APPROVED"
+          else
+            gh pr review ${{ github.event.pull_request.number }} --request-changes \
+              --body "Reviewer Agent: REJECTED — see review comment for details"
+          fi
