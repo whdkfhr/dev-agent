@@ -20,7 +20,8 @@ jobs:
             NAME=$1
             COLOR=$2
             DESC=$3
-            gh label create "$NAME" --color "$COLOR" --description "$DESC" --force
+            gh label create "$NAME" --color "$COLOR" --description "$DESC" --force \
+              --repo "$REPO"
           }
 
           # Agent trigger labels
