@@ -14,16 +14,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check API key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY is not set. Reviewer Agent requires API access."
+            echo "Skipping automated review. Please review manually."
+            exit 0
+          fi
+          echo "has_key=true" >> "$GITHUB_ENV"
+
       - name: Checkout
+        if: env.has_key == 'true'
         uses: actions/checkout@v4
 
       - name: Get PR diff
+        if: env.has_key == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr diff ${{ github.event.pull_request.number }} | head -c 8000 > /tmp/pr_diff.txt
 
       - name: Resolve TASK and DESIGN from PR title
+        if: env.has_key == 'true'
         run: |
           PR_TITLE="${{ github.event.pull_request.title }}"
           # Extract padded issue number from title format: "feat: TASK-001 - ..."
@@ -36,6 +50,7 @@ jobs:
           echo "TASK_ID=${TASK_ID}" >> $GITHUB_ENV
 
       - name: Call Claude — Reviewer
+        if: env.has_key == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           PR_TITLE: ${{ github.event.pull_request.title }}
@@ -69,6 +84,7 @@ jobs:
             }" | jq -r '.content[0].text' > /tmp/review_result.txt
 
       - name: Post review comment
+        if: env.has_key == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -78,6 +94,7 @@ jobs:
           $(cat /tmp/review_result.txt)"
 
       - name: Approve or Request Changes
+        if: env.has_key == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
