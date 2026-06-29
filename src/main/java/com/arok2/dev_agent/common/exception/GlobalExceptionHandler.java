@@ -27,6 +27,18 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("DUPLICATE_TASK", e.getMessage()));
     }
 
+    @ExceptionHandler(DesignNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleDesignNotFound(DesignNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("DESIGN_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(DesignAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleDesignAlreadyExists(DesignAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse("DUPLICATE_DESIGN", e.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception e) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
