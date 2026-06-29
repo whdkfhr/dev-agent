@@ -15,6 +15,18 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("MISSING_HEADER", e.getMessage()));
     }
 
+    @ExceptionHandler(TaskNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleTaskNotFound(TaskNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("TASK_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(TaskAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleTaskAlreadyExists(TaskAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse("DUPLICATE_TASK", e.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception e) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
