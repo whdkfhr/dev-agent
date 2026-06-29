@@ -44,52 +44,53 @@ jobs:
       - name: "[Planner] Generate TASK"
         run: |
           python3 - <<'PYEOF'
-          import os
+          import os, textwrap
           task_id = os.environ['TASK_ID']
-          content = f"""# TASK-{task_id}
+          content = textwrap.dedent(f"""\
+              # TASK-{task_id}
 
-## Summary
-서버 상태를 확인할 수 있는 Health Check 엔드포인트를 추가한다.
+              ## Summary
+              서버 상태를 확인할 수 있는 Health Check 엔드포인트를 추가한다.
 
-## Background
-배포 후 서버가 정상적으로 실행 중인지 확인할 수 있는 API가 없어서
-운영 모니터링이 불가능하다.
+              ## Background
+              배포 후 서버가 정상적으로 실행 중인지 확인할 수 있는 API가 없어서
+              운영 모니터링이 불가능하다.
 
-## Goals
-- GET /health 엔드포인트 구현
-- 서버 상태 응답 반환
+              ## Goals
+              - GET /health 엔드포인트 구현
+              - 서버 상태 응답 반환
 
-## Scope
+              ## Scope
 
-### In Scope
-- GET /health (200 OK, {{"status": "UP"}})
+              ### In Scope
+              - GET /health (200 OK, {{"status": "UP"}})
 
-### Out of Scope
-- DB 연결 상태 확인
-- 외부 시스템 상태 확인
+              ### Out of Scope
+              - DB 연결 상태 확인
+              - 외부 시스템 상태 확인
 
-## Requirements
+              ## Requirements
 
-### Functional
-- GET /health 호출 시 200 OK 반환
-- 응답 바디에 status 필드 포함
+              ### Functional
+              - GET /health 호출 시 200 OK 반환
+              - 응답 바디에 status 필드 포함
 
-### Non-Functional
-- 인증 불필요 (공개 엔드포인트)
+              ### Non-Functional
+              - 인증 불필요 (공개 엔드포인트)
 
-## Acceptance Criteria
-- [ ] GET /health 200 OK 반환
-- [ ] 응답 바디: {{"status": "UP"}}
+              ## Acceptance Criteria
+              - [ ] GET /health 200 OK 반환
+              - [ ] 응답 바디: {{"status": "UP"}}
 
-## Dependencies
-없음
+              ## Dependencies
+              없음
 
-## Test Requirements
-- HealthController MockMvc 통합 테스트
+              ## Test Requirements
+              - HealthController MockMvc 통합 테스트
 
-## Status
-TODO
-"""
+              ## Status
+              TODO
+          """)
           os.makedirs('docs/tasks', exist_ok=True)
           with open(f'docs/tasks/TASK-{task_id}.md', 'w') as f:
               f.write(content)
@@ -107,63 +108,55 @@ TODO
       - name: "[Architect] Generate DESIGN"
         run: |
           python3 - <<'PYEOF'
-          import os
+          import os, textwrap
           task_id = os.environ['TASK_ID']
-          content = f"""# DESIGN-{task_id}
+          content = textwrap.dedent(f"""\
+              # DESIGN-{task_id}
 
-## Overview
-Health Check 엔드포인트를 구현한다.
-응답은 항상 200 OK이며 {{"status": "UP"}}을 반환한다.
+              ## Overview
+              Health Check 엔드포인트를 구현한다.
+              응답은 항상 200 OK이며 {{"status": "UP"}}을 반환한다.
 
-## Architecture Overview
+              ## Architecture Overview
 
-```
-Client
-  │ GET /health
-  ▼
-HealthController
-  └─ HealthResponse("UP") → 200 OK
-```
+              Client → GET /health → HealthController → HealthResponse("UP") → 200 OK
 
-## API Design
+              ## API Design
 
-### GET /health
+              ### GET /health
 
-Response 200:
-```json
-{{"status": "UP"}}
-```
+              Response 200:
+              ```json
+              {{"status": "UP"}}
+              ```
 
-## Data Model
+              ## Data Model
 
-### HealthResponse (DTO Record)
+              ### HealthResponse (DTO Record)
 
-| Field  | Type   | Description |
-|--------|--------|-------------|
-| status | String | 항상 "UP"   |
+              | Field  | Type   | Description |
+              |--------|--------|-------------|
+              | status | String | 항상 "UP"   |
 
-## Package Structure
+              ## Package Structure
 
-```
-com.arok2.dev_agent
-└── health/
-    ├── controller/
-    │   └── HealthController.java
-    └── dto/
-        └── HealthResponse.java
-```
+              com.arok2.dev_agent
+              └── health/
+                  ├── controller/
+                  │   └── HealthController.java
+                  └── dto/
+                      └── HealthResponse.java
 
-## Key Design Decisions
-- HealthResponse를 Java Record로 정의 (불변성 보장)
-- 별도 Service 레이어 없음 (비즈니스 로직 없으므로)
+              ## Key Design Decisions
+              - HealthResponse를 Java Record로 정의 (불변성 보장)
+              - 별도 Service 레이어 없음 (비즈니스 로직 없으므로)
 
-## Implementation Guide
+              ## Implementation Guide
 
-구현 순서:
-1. HealthResponse.java — DTO Record 생성
-2. HealthController.java — GET /health 엔드포인트
-3. HealthControllerTest.java — MockMvc 통합 테스트
-"""
+              1. HealthResponse.java — DTO Record 생성
+              2. HealthController.java — GET /health 엔드포인트
+              3. HealthControllerTest.java — MockMvc 통합 테스트
+          """)
           os.makedirs('docs/design', exist_ok=True)
           with open(f'docs/design/DESIGN-{task_id}.md', 'w') as f:
               f.write(content)
@@ -176,9 +169,9 @@ com.arok2.dev_agent
           import re, os
           task_id = os.environ['TASK_ID']
           path = f'docs/tasks/TASK-{task_id}.md'
-          with open(path) as f: content = f.read()
+          content = open(path).read()
           content = re.sub(r'(## Status\n)TODO', r'\1IN_PROGRESS', content)
-          with open(path, 'w') as f: f.write(content)
+          open(path, 'w').write(content)
           print('TASK status: TODO → IN_PROGRESS')
           "
 
@@ -196,65 +189,71 @@ com.arok2.dev_agent
       - name: "[Implementer] Generate code"
         run: |
           python3 - <<'PYEOF'
-          import os
+          import os, textwrap
 
-          files = {
-              'src/main/java/com/arok2/dev_agent/health/dto/HealthResponse.java': '''\
-package com.arok2.dev_agent.health.dto;
-
-public record HealthResponse(String status) {}
-''',
-              'src/main/java/com/arok2/dev_agent/health/controller/HealthController.java': '''\
-package com.arok2.dev_agent.health.controller;
-
-import com.arok2.dev_agent.health.dto.HealthResponse;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-@RestController
-public class HealthController {
-
-    @GetMapping("/health")
-    public ResponseEntity<HealthResponse> health() {
-        return ResponseEntity.ok(new HealthResponse("UP"));
-    }
-}
-''',
-              'src/test/java/com/arok2/dev_agent/health/controller/HealthControllerTest.java': '''\
-package com.arok2.dev_agent.health.controller;
-
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.web.servlet.MockMvc;
-
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-
-@SpringBootTest
-@AutoConfigureMockMvc
-class HealthControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Test
-    void health_returns200WithStatusUp() throws Exception {
-        mockMvc.perform(get("/health"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("UP"));
-    }
-}
-''',
-          }
-
-          for path, content in files.items():
+          def write_file(path, content):
               os.makedirs(os.path.dirname(path), exist_ok=True)
               with open(path, 'w') as f:
-                  f.write(content)
+                  f.write(textwrap.dedent(content).lstrip('\n'))
               print(f'Written: {path}')
+
+          write_file(
+              'src/main/java/com/arok2/dev_agent/health/dto/HealthResponse.java',
+              """
+              package com.arok2.dev_agent.health.dto;
+
+              public record HealthResponse(String status) {}
+              """)
+
+          write_file(
+              'src/main/java/com/arok2/dev_agent/health/controller/HealthController.java',
+              """
+              package com.arok2.dev_agent.health.controller;
+
+              import com.arok2.dev_agent.health.dto.HealthResponse;
+              import org.springframework.http.ResponseEntity;
+              import org.springframework.web.bind.annotation.GetMapping;
+              import org.springframework.web.bind.annotation.RestController;
+
+              @RestController
+              public class HealthController {
+
+                  @GetMapping("/health")
+                  public ResponseEntity<HealthResponse> health() {
+                      return ResponseEntity.ok(new HealthResponse("UP"));
+                  }
+              }
+              """)
+
+          write_file(
+              'src/test/java/com/arok2/dev_agent/health/controller/HealthControllerTest.java',
+              """
+              package com.arok2.dev_agent.health.controller;
+
+              import org.junit.jupiter.api.Test;
+              import org.springframework.beans.factory.annotation.Autowired;
+              import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+              import org.springframework.boot.test.context.SpringBootTest;
+              import org.springframework.test.web.servlet.MockMvc;
+
+              import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+              import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+              @SpringBootTest
+              @AutoConfigureMockMvc
+              class HealthControllerTest {
+
+                  @Autowired
+                  private MockMvc mockMvc;
+
+                  @Test
+                  void health_returns200WithStatusUp() throws Exception {
+                      mockMvc.perform(get("/health"))
+                              .andExpect(status().isOk())
+                              .andExpect(jsonPath("$.status").value("UP"));
+                  }
+              }
+              """)
           PYEOF
 
       - name: "[Implementer] Update TASK status to IN_REVIEW"
@@ -263,9 +262,9 @@ class HealthControllerTest {
           import re, os
           task_id = os.environ['TASK_ID']
           path = f'docs/tasks/TASK-{task_id}.md'
-          with open(path) as f: content = f.read()
+          content = open(path).read()
           content = re.sub(r'(## Status\n)IN_PROGRESS', r'\1IN_REVIEW', content)
-          with open(path, 'w') as f: f.write(content)
+          open(path, 'w').write(content)
           print('TASK status: IN_PROGRESS → IN_REVIEW')
           "
 
@@ -284,10 +283,10 @@ class HealthControllerTest {
             --title "feat: TASK-${{ env.TASK_ID }} - [E2E Mock] Health Check 엔드포인트 추가" \
             --body "Closes #${{ env.ISSUE_NUMBER }}
 
-[Mock] Implementer Agent가 생성한 PR입니다.
+          [Mock] Implementer Agent가 생성한 PR입니다.
 
-- TASK: docs/tasks/TASK-${{ env.TASK_ID }}.md
-- DESIGN: docs/design/DESIGN-${{ env.TASK_ID }}.md" \
+          - TASK: docs/tasks/TASK-${{ env.TASK_ID }}.md
+          - DESIGN: docs/design/DESIGN-${{ env.TASK_ID }}.md" \
             --base develop \
             --head ${{ env.BRANCH }})
           PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
@@ -301,26 +300,25 @@ class HealthControllerTest {
         run: |
           gh pr comment ${{ env.PR_NUMBER }} --body "## Reviewer Agent Report [Mock]
 
-## Review Result
-APPROVED
+          ## Review Result
+          APPROVED
 
-## Summary
-TASK-${{ env.TASK_ID }} 구현이 DESIGN 계약을 준수하며 테스트가 포함되어 있습니다.
+          ## Summary
+          TASK-${{ env.TASK_ID }} 구현이 DESIGN 계약을 준수하며 테스트가 포함되어 있습니다.
 
-## Issues Found
-없음
+          ## Issues Found
+          없음
 
-## Architecture Compliance
-- Controller 레이어 분리 ✅
-- Record DTO 사용 ✅
-- Constructor injection ✅
+          ## Architecture Compliance
+          - Controller 레이어 분리 ✅
+          - Record DTO 사용 ✅
 
-## Test Coverage
-- HealthControllerTest (MockMvc) ✅
+          ## Test Coverage
+          - HealthControllerTest (MockMvc) ✅
 
-## Acceptance Criteria
-- [x] GET /health 200 OK 반환
-- [x] 응답 바디: {\"status\": \"UP\"}"
+          ## Acceptance Criteria
+          - [x] GET /health 200 OK 반환
+          - [x] 응답 바디: {\"status\": \"UP\"}"
 
       - name: "[Reviewer] Approve PR"
         env:
