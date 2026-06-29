@@ -45,7 +45,13 @@ jobs:
             }" | jq -r '.content[0].text' > docs/design/DESIGN-${TASK_ID}.md
 
           # Update TASK status: TODO → IN_PROGRESS
-          sed -i 's/^## Status\nTODO/## Status\nIN_PROGRESS/' "$TASK_FILE" || true
+          python3 -c "
+import re
+with open('$TASK_FILE') as f: content = f.read()
+content = re.sub(r'(## Status\n)TODO', r'\1IN_PROGRESS', content)
+with open('$TASK_FILE', 'w') as f: f.write(content)
+print('TASK status updated to IN_PROGRESS')
+          "
 
           echo "TASK_ID=${TASK_ID}" >> $GITHUB_ENV
 

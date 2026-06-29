@@ -26,10 +26,17 @@ jobs:
 
           # JSON-safe encoding via jq --arg (handles quotes, newlines, special chars)
           SYSTEM=$(jq -Rs . < .claude/agents/planner.md)
+
+          # Collect existing TASK list for duplicate prevention
+          EXISTING_TASKS=$(ls docs/tasks/ 2>/dev/null | tr '\n' ', ' || echo "none")
+
           USER_MSG=$(jq -n \
             --arg title "Issue #${{ github.event.issue.number }}: $ISSUE_TITLE" \
             --arg body "$ISSUE_BODY" \
-            '"Context:\n" + $title + "\n\n" + $body')
+            --rawfile vision "docs/product/vision.md" \
+            --rawfile roadmap "docs/product/roadmap.md" \
+            --arg existing "Existing TASKs: $EXISTING_TASKS" \
+            '"## Issue\n" + $title + "\n\n" + $body + "\n\n## Project Vision\n" + $vision + "\n\n## Roadmap\n" + $roadmap + "\n\n## Context\n" + $existing')
 
           curl -sf https://api.anthropic.com/v1/messages \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
