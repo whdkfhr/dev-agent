@@ -63,6 +63,18 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("DUPLICATE_REVIEW", e.getMessage()));
     }
 
+    @ExceptionHandler(PullRequestNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handlePullRequestNotFound(PullRequestNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("PULL_REQUEST_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(PullRequestAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handlePullRequestAlreadyExists(PullRequestAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse("DUPLICATE_PULL_REQUEST", e.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception e) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
