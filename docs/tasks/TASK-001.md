@@ -52,4 +52,4 @@ GitHub Actions 파이프라인의 시작점은 GitHub Issue Event다.
 - WebhookService 단위 테스트
 
 ## Status
-IN_PROGRESS
+IN_REVIEW
