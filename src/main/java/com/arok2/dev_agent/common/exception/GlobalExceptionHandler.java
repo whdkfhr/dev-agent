@@ -39,6 +39,18 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("DUPLICATE_DESIGN", e.getMessage()));
     }
 
+    @ExceptionHandler(ImplementationNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleImplementationNotFound(ImplementationNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("IMPLEMENTATION_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(ImplementationAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleImplementationAlreadyExists(ImplementationAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse("DUPLICATE_IMPLEMENTATION", e.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception e) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
