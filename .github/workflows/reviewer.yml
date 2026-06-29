@@ -99,10 +99,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if grep -q "^APPROVED" /tmp/review_result.txt; then
-            gh pr review ${{ github.event.pull_request.number }} --approve \
-              --body "Reviewer Agent: APPROVED"
+            # Note: github-actions[bot] cannot approve its own PR.
+            # Auto-merge is used instead of approve.
+            gh pr merge ${{ github.event.pull_request.number }} \
+              --squash --auto \
+              --body "Reviewer Agent: APPROVED — auto-merged" || \
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --body "Reviewer Agent: APPROVED — please merge manually."
           else
-            gh pr review ${{ github.event.pull_request.number }} --request-changes \
+            gh pr comment ${{ github.event.pull_request.number }} \
               --body "Reviewer Agent: REJECTED — see review comment for details"
 
             # Trigger Self-Healing: add review_failed label to linked issue
