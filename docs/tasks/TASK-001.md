@@ -1,43 +1,55 @@
 # TASK-001
 
 ## Summary
-서버 상태를 확인할 수 있는 Health Check 엔드포인트를 추가한다.
+GitHub에서 발생한 Issue 이벤트를 Webhook으로 수신하고, 저장 후 로그를 출력한다.
 
 ## Background
-배포 후 서버가 정상적으로 실행 중인지 확인할 수 있는 API가 없어서
-운영 모니터링이 불가능하다.
+GitHub Actions 파이프라인의 시작점은 GitHub Issue Event다.
+서버가 Webhook을 수신할 수 있어야 이후 Planner Agent 호출 등 자동화가 가능하다.
 
 ## Goals
-- GET /health 엔드포인트 구현
-- 서버 상태 응답 반환
+- GitHub Webhook POST 요청을 수신하는 엔드포인트를 구현한다
+- 수신한 이벤트를 메모리에 저장한다
+- 이벤트 수신 로그를 출력한다
 
 ## Scope
 
 ### In Scope
-- GET /health (200 OK, {"status": "UP"})
+- `POST /webhook/github` 엔드포인트 구현
+- `X-GitHub-Event` 헤더로 이벤트 타입 식별
+- 이벤트 payload를 메모리(ConcurrentHashMap)에 저장
+- 이벤트 수신 로그 출력 (eventId, eventType, action)
 
 ### Out of Scope
-- DB 연결 상태 확인
-- 외부 시스템 상태 확인
+- GitHub Webhook Signature 검증 (X-Hub-Signature-256)
+- 데이터베이스 저장 (Phase 3)
+- Planner Agent 호출
+- 이벤트 타입별 분기 처리
 
 ## Requirements
 
 ### Functional
-- GET /health 호출 시 200 OK 반환
-- 응답 바디에 status 필드 포함
+- `POST /webhook/github` 호출 시 200 OK 반환
+- `X-GitHub-Event` 헤더가 없으면 400 Bad Request 반환
+- payload에서 `action` 필드 추출
+- 이벤트마다 고유한 UUID 부여
 
 ### Non-Functional
-- 인증 불필요 (공개 엔드포인트)
+- 로그는 eventId, eventType, action을 포함해야 한다
+- 잘못된 요청은 의미 있는 에러 메시지를 반환해야 한다
 
 ## Acceptance Criteria
-- [ ] GET /health 200 OK 반환
-- [ ] 응답 바디: {"status": "UP"}
+- [ ] POST /webhook/github 호출 시 200 OK와 eventId 반환
+- [ ] X-GitHub-Event 헤더 없으면 400 반환
+- [ ] 수신 시 로그에 eventId, eventType, action 출력
+- [ ] 이벤트가 메모리에 저장되고 조회 가능
 
 ## Dependencies
 없음
 
 ## Test Requirements
-- HealthController MockMvc 통합 테스트
+- WebhookController 통합 테스트 (MockMvc)
+- WebhookService 단위 테스트
 
 ## Status
-IN_PROGRESS
+IN_REVIEW
