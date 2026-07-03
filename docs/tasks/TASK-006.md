@@ -40,4 +40,4 @@
 - HealthController MockMvc 통합 테스트
 
 ## Status
-TODO
+IN_PROGRESS
