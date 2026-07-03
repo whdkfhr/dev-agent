@@ -93,6 +93,25 @@ jobs:
 
           $(cat /tmp/review_result.txt)"
 
+      - name: Register Review to Server
+        if: env.has_key == 'true'
+        run: |
+          STATUS=$(grep -q "^APPROVED" /tmp/review_result.txt && echo "APPROVED" || echo "REJECTED")
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          REVIEW_CONTENT=$(cat /tmp/review_result.txt)
+
+          curl -sf -X POST "${{ secrets.SERVER_URL }}/reviews" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg reviewId "REVIEW-${{ env.TASK_ID }}-${PR_NUMBER}" \
+              --arg implId "IMPL-${{ env.TASK_ID }}" \
+              --arg taskId "TASK-${{ env.TASK_ID }}" \
+              --arg status "$STATUS" \
+              --argjson comments "$(echo "$REVIEW_CONTENT" | jq -R . | jq -s .)" \
+              '{reviewId: $reviewId, implId: $implId, taskId: $taskId, status: $status, comments: $comments}')" && \
+          echo "Review registered to server" || \
+          echo "WARN: Failed to register review to server (non-blocking)"
+
       - name: Approve or Request Changes
         if: env.has_key == 'true'
         env:
