@@ -23,6 +23,7 @@ jobs:
         run: |
           TASK_ID=$(printf '%03d' ${{ github.event.issue.number }})
           TASK_FILE="docs/tasks/TASK-${TASK_ID}.md"
+          export TASK_FILE
 
           # GATE 1: TASK must exist
           if [ ! -f "$TASK_FILE" ]; then
@@ -45,13 +46,14 @@ jobs:
             }" | jq -r '.content[0].text' > docs/design/DESIGN-${TASK_ID}.md
 
           # Update TASK status: TODO → IN_PROGRESS
-          python3 -c "
-import re
-with open('$TASK_FILE') as f: content = f.read()
-content = re.sub(r'(## Status\n)TODO', r'\1IN_PROGRESS', content)
-with open('$TASK_FILE', 'w') as f: f.write(content)
-print('TASK status updated to IN_PROGRESS')
-          "
+          python3 << 'PYEOF'
+          import re, os
+          task_file = os.environ['TASK_FILE']
+          with open(task_file) as f: content = f.read()
+          content = re.sub(r'(## Status\n)TODO', r'\1IN_PROGRESS', content)
+          with open(task_file, 'w') as f: f.write(content)
+          print('TASK status updated to IN_PROGRESS')
+          PYEOF
 
           echo "TASK_ID=${TASK_ID}" >> $GITHUB_ENV
 
