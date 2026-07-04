@@ -125,7 +125,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/
+          # Stage all patched files regardless of path (not just src/), so files
+          # the Fix Agent writes outside src/ are not silently dropped.
+          git add -A
           git diff --staged --quiet || \
             git commit -m "fix: patch TASK-${{ env.TASK_ID }} retry-${{ env.RETRY_N }} by Fix Agent [skip ci]"
           git push origin ${{ env.PR_BRANCH }}
