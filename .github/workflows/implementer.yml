@@ -103,9 +103,15 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/ docs/tasks/ generated/ 2>/dev/null || true
-          git diff --staged --quiet || \
-            git commit -m "feat: implement TASK-${{ env.TASK_ID }} by Implementer [skip ci]"
+          # Stage every file the Implementer produced, regardless of path
+          # (src/, docs/tasks/, or the generated/ fallback). A fixed pathspec
+          # list would fatal-abort when one path is absent and stage nothing.
+          git add -A
+          if git diff --staged --quiet; then
+            echo "ERROR: Implementer produced no changes to commit. Aborting before creating an empty PR."
+            exit 1
+          fi
+          git commit -m "feat: implement TASK-${{ env.TASK_ID }} by Implementer [skip ci]"
           git push origin ${{ env.BRANCH }}
 
       - name: Create Pull Request
