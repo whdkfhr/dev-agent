@@ -39,6 +39,7 @@ dev-agent/
     │   ├── architect/
     │   ├── implementer/
     │   └── reviewer/
+    ├── agentrun/       # Issue 단위 실행 상태, step log, tool registry
     ├── workflow/       # 워크플로우 엔진
     ├── task/           # 작업 관리
     ├── github/         # GitHub 연동 (Phase 4)
@@ -119,6 +120,43 @@ GitHub Label이 파이프라인 상태를 나타냅니다.
 | `done`      | 완료                | -                   |
 
 GitHub = 상태 저장소, Label = 상태, MD 파일 = 계약, PR = 실행 결과
+
+## AgentRun Execution Tracking
+
+AgentRun은 하나의 GitHub Issue 처리 실행을 나타내는 애플리케이션 도메인입니다.
+GitHub Label 기반 외부 상태와 별개로 서버 내부에서 Agent pipeline 진행 상태와 Tool Use 로그를 추적합니다.
+
+```
+PLANNING → DESIGNING → IMPLEMENTING → TESTING → REVIEWING → PR_READY
+```
+
+각 Agent step은 다음 정보를 기록합니다.
+
+| Field    | 의미 |
+|----------|------|
+| input    | Agent 또는 tool 입력 |
+| output   | Agent 또는 tool 출력 |
+| toolName | 사용한 tool 이름 |
+| status   | SUCCESS 또는 FAILED |
+| retry    | 재시도 여부 |
+
+## Tool Registry
+
+Agent가 호출 가능한 tool capability는 Tool Registry로 분리합니다.
+
+| Tool | Responsibility |
+|------|----------------|
+| RepositoryContextTool | README, build.gradle, 패키지 구조 조회 |
+| TaskDocumentTool | TASK 문서 생성 및 검증 |
+| DesignDocumentTool | DESIGN 문서 생성 및 검증 |
+| CodePatchTool | 생성된 파일 블록 파싱 및 패치 계획 생성 |
+| TestRunnerTool | `./gradlew test` 실행 결과 수집 |
+| ReviewTool | diff와 테스트 결과 기반 리뷰 생성 |
+| PullRequestTool | PR 제목/본문 생성 |
+
+현재 구현은 커스텀 Tool Registry를 사용합니다.
+Spring AI 적용 시 Tool Registry의 각 항목을 ToolCallback으로 노출하고,
+ChatClient와 ToolCallingAdvisor를 통해 LLM tool calling loop에 연결합니다.
 
 ## GitHub Actions File Structure
 

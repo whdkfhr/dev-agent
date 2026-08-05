@@ -75,6 +75,30 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("DUPLICATE_PULL_REQUEST", e.getMessage()));
     }
 
+    @ExceptionHandler(AgentRunNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleAgentRunNotFound(AgentRunNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("AGENT_RUN_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(AgentRunAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleAgentRunAlreadyExists(AgentRunAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse("DUPLICATE_AGENT_RUN", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidAgentRunStatusTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidAgentRunStatusTransition(InvalidAgentRunStatusTransitionException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse("INVALID_AGENT_RUN_STATUS_TRANSITION", e.getMessage()));
+    }
+
+    @ExceptionHandler(ToolNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleToolNotFound(ToolNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("TOOL_NOT_FOUND", e.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception e) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
