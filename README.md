@@ -4,6 +4,8 @@ AI Agent 기반 개발자 작업 자동화 시스템
 
 GitHub Issue를 입력으로 받아 AI Agent가 작업을 분석하고, 코드를 생성하며, 최종적으로 Pull Request를 자동 생성하는 오케스트레이션 플랫폼입니다.
 
+Spring Boot 기반 AI Agent 파이프라인을 구축해 GitHub Issue 분석, 설계 문서 생성, 코드 생성, 테스트 실행, 리뷰, PR 작성까지 이어지는 Multi-step 개발 자동화 워크플로우를 구현했습니다.
+
 ---
 
 ## Overview
@@ -19,10 +21,13 @@ Implementer     코드 구현 → 소스 코드 + 테스트 → POST /implementa
       ↓
   Reviewer      코드 리뷰 → APPROVED / REJECTED → POST /reviews
       ↓
- Pull Request   자동 생성 → POST /pull-requests
+Pull Request   자동 생성 → POST /pull-requests
 ```
 
 각 단계는 GitHub Actions로 자동 실행되며, 산출물은 Railway에 배포된 Spring Boot 서버에 저장됩니다.
+
+AgentRun 도메인은 하나의 Issue 처리 과정을 `PLANNING → DESIGNING → IMPLEMENTING → TESTING → REVIEWING → PR_READY` 상태로 추적합니다.
+각 step은 입력, 출력, 사용 tool, 성공/실패, 재시도 여부를 로그로 저장해 LLM 기반 자동화 흐름의 추적 가능성과 디버깅 가능성을 높입니다.
 
 ---
 
@@ -64,6 +69,13 @@ Implementer     코드 구현 → 소스 코드 + 테스트 → POST /implementa
 | GET | `/pull-requests` | PullRequest 목록 조회 |
 | GET | `/pull-requests/{prId}` | PullRequest 단건 조회 |
 | GET | `/pull-requests/by-task/{taskId}` | Task 기반 PullRequest 조회 |
+| POST | `/agent-runs` | AgentRun 생성 |
+| GET | `/agent-runs` | AgentRun 목록 조회 |
+| GET | `/agent-runs/{runId}` | AgentRun 단건 조회 |
+| POST | `/agent-runs/{runId}/advance` | AgentRun 다음 상태 전이 |
+| POST | `/agent-runs/{runId}/steps` | AgentRun step log 추가 |
+| GET | `/tools` | Agent Tool Registry 조회 |
+| GET | `/tools/{toolName}` | Agent Tool 단건 조회 |
 
 ---
 
@@ -77,6 +89,31 @@ Implementer     코드 구현 → 소스 코드 + 테스트 → POST /implementa
 | **Architect** | Task 기반 설계 → API/데이터 모델 정의 | `design` 라벨 | `docs/design/DESIGN-{ID}.md` |
 | **Implementer** | 설계 기반 코드 구현 | `implement` 라벨 | 소스 코드 + 테스트 + PR |
 | **Reviewer** | 코드 품질 / 아키텍처 준수 / 보안 검토 | PR 생성 | 리뷰 코멘트 |
+
+### AgentRun State Machine
+
+```
+PLANNING → DESIGNING → IMPLEMENTING → TESTING → REVIEWING → PR_READY
+```
+
+AgentRun은 Issue 하나를 처리하는 전체 실행 단위입니다.
+기존 Task, Design, Implementation, Review, PullRequest 산출물을 실행 관점에서 묶고,
+각 단계에서 어떤 tool이 어떤 입력과 출력으로 호출되었는지 기록합니다.
+
+### Tool Registry
+
+| Tool | 책임 |
+|------|------|
+| RepositoryContextTool | README, build.gradle, 패키지 구조 조회 |
+| TaskDocumentTool | TASK 문서 생성 및 검증 |
+| DesignDocumentTool | DESIGN 문서 생성 및 검증 |
+| CodePatchTool | 생성된 파일 블록 파싱 및 패치 계획 생성 |
+| TestRunnerTool | `./gradlew test` 실행 결과 수집 |
+| ReviewTool | diff와 테스트 결과 기반 리뷰 생성 |
+| PullRequestTool | PR 제목/본문 생성 |
+
+현재는 커스텀 Tool Registry로 tool capability를 명시적으로 분리했습니다.
+Spring AI 적용 시에는 각 tool을 `ToolCallback` bean으로 노출하고, `ChatClient`와 `ToolCallingAdvisor`를 통해 LLM의 tool calling loop와 연결할 수 있도록 확장할 계획입니다.
 
 ### Gate System
 
@@ -133,6 +170,7 @@ dev-agent/
     ├── implementation/                # Implementation 관리 API
     ├── review/                        # Review 관리 API
     ├── pullrequest/                   # PullRequest 관리 API
+    ├── agentrun/                      # AgentRun 상태 추적 + Tool Registry
     └── common/exception/              # 전역 예외 처리
 ```
 
@@ -199,6 +237,8 @@ SERVER_URL=https://dev-agent-production-1459.up.railway.app
 | Phase 4 | Implementer Agent — Implementation 관리 API | ✅ 완료 |
 | Phase 5 | Reviewer Agent — Review 관리 API | ✅ 완료 |
 | Phase 6 | Pull Request 관리 API + Railway 배포 | ✅ 완료 |
+| Phase 7 | AgentRun 상태 추적 + Tool Registry + step log | ✅ 완료 |
+| Phase 8 | Spring AI ToolCallback 기반 실제 Tool Calling 연동 | 예정 |
 
 ---
 

@@ -48,3 +48,23 @@ Reviewer Agent
 ## Phase 6 ✅
 
 Pull Request 자동 생성
+
+## Phase 7 ✅
+
+AgentRun 실행 추적 및 Tool Registry
+
+목표
+
+- Issue 단위 AgentRun 상태 추적
+- Multi-step 실행 로그 저장
+- Agent Tool capability 명시적 분리
+
+## Phase 8
+
+Spring AI 기반 Tool Calling 연동
+
+목표
+
+- Tool Registry를 ToolCallback 구조로 확장
+- ChatClient 기반 agent execution loop 구성
+- ToolCallingAdvisor 기반 tool use 관측성 강화
