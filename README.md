@@ -24,7 +24,7 @@ Implementer     구현 산출물 기록 → 소스 코드 + 테스트 → POST /
 Pull Request   검증된 변경분을 PR로 추적 → POST /pull-requests
 ```
 
-각 단계는 GitHub Actions와 문서 산출물을 중심으로 연결되며, 산출물은 Railway에 배포된 Spring Boot 서버에 저장됩니다.
+각 단계는 GitHub Actions와 문서 산출물을 중심으로 연결되며, 산출물 메타데이터는 Spring Boot 서버의 인메모리 저장소에 기록됩니다. Railway 배포 환경에서는 API 흐름과 상태 전이를 확인할 수 있습니다.
 
 AgentRun 도메인은 하나의 Issue 처리 과정을 `PLANNING → DESIGNING → IMPLEMENTING → TESTING → REVIEWING → PR_READY` 상태로 추적합니다.
 각 step은 입력, 출력, 사용 tool, 성공/실패, 재시도 여부를 로그로 저장해 LLM 기반 자동화 흐름의 추적 가능성과 디버깅 가능성을 높입니다.
