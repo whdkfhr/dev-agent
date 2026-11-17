@@ -23,7 +23,7 @@ The following sections MUST exist and MUST NOT be empty.
 | Section              | Required Content                                   |
 | -------------------- | -------------------------------------------------- |
 | `# TASK-{ID}`        | Header with valid numeric ID                       |
-| `## Summary`         | Single clear sentence describing the objective     |
+| `## Summary`         | Exactly one sentence describing the objective      |
 | `## Background`      | Why the work is needed                             |
 | `## Goals`           | At least one goal                                  |
 | `## Scope` → `### In Scope` | At least one item in scope                  |
@@ -44,7 +44,7 @@ The section names and order are those of the STRICT FORMAT in `.claude/agents/pl
 ### FAIL conditions (regenerate required)
 
 - Any required section is missing
-- `## Summary` contains more than 2 sentences
+- `## Summary` is not exactly one sentence (empty, or two or more sentences)
 - `## Goals` or `## Requirements` contains implementation details (class names, method names, annotations)
 - `## Acceptance Criteria` contains non-measurable items (e.g. "works correctly")
 - `## Status` is not `TODO`
@@ -81,7 +81,7 @@ If found, TASK is INVALID.
 Run through this checklist before marking GATE 1 as passed.
 
 - [ ] `# TASK-{ID}` header exists
-- [ ] `## Summary` is one clear sentence
+- [ ] `## Summary` is exactly one sentence
 - [ ] `## Background` is filled
 - [ ] `## Goals` has at least one item
 - [ ] `### In Scope` has at least one item

@@ -125,6 +125,7 @@ X 이후에 Y가 아닌 변경이 생기면 내용 승인은 무효가 되고 2�
 
 - `.claude/templates/TASK.md`를 `planner.md`의 형식으로 바꾼다.
 - `.claude/templates/DESIGN.md`의 섹션 번호와 `(for Implementer)` 접미어를 없앤다.
+  - 같은 파일의 예시를 `architect.md` STRICT FORMAT과 `design-validator.md`의 필수 내용에 맞춘다. 성공 응답 상태 코드(`Response 201:` 등), 상태 코드별 Error 사유, Entity 관계 표기, 패키지 루트 `com.arok2.dev_agent`, 사유가 붙은 Key Design Decisions, `Selected` 열이 있는 Trade-offs 표다.
 - `.claude/validators/task-validator.md`의 필수 섹션을 같은 형식으로 바꾼다.
 - `.claude/validators/code-validator.md`의 `## Tasks` 참조를 `## Requirements`의 `### Functional`로 바꾼다.
 
@@ -132,7 +133,7 @@ X 이후에 Y가 아닌 변경이 생기면 내용 승인은 무효가 되고 2�
 
 | 검사 | 변경 전 | 변경 후 |
 | ---- | ------- | ------- |
-| 목표 문장 | `## Goal`이 한 문장, 2문장 초과 시 FAIL | `## Summary`가 한 문장, 2문장 초과 시 FAIL |
+| 목표 문장 | `## Goal`이 한 문장, 2문장 초과 시 FAIL | `## Summary`가 정확히 한 문장, 두 문장 이상이면 FAIL (강화) |
 | 작업 항목 | `## Tasks`에 2개 이상 | 삭제. `## Goals` 1개 이상과 `### Functional` 1개 이상으로 대체 |
 | 배경 | 없음 | `## Background` 필수 (추가) |
 | 비기능 요구사항 | 없음 | `### Non-Functional` 필수, "None" 허용 (추가) |
