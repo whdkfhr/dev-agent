@@ -23,14 +23,19 @@ The following sections MUST exist and MUST NOT be empty.
 | Section              | Required Content                                   |
 | -------------------- | -------------------------------------------------- |
 | `# TASK-{ID}`        | Header with valid numeric ID                       |
-| `## Goal`            | Single clear sentence describing the objective     |
-| `## Scope`           | At least one item in scope                         |
-| `## Out of Scope`    | At least one item explicitly excluded              |
-| `## Tasks`           | Minimum 2 bullet items                             |
+| `## Summary`         | Exactly one sentence describing the objective      |
+| `## Background`      | Why the work is needed                             |
+| `## Goals`           | At least one goal                                  |
+| `## Scope` → `### In Scope` | At least one item in scope                  |
+| `## Scope` → `### Out of Scope` | At least one item explicitly excluded   |
+| `## Requirements` → `### Functional` | At least one functional requirement |
+| `## Requirements` → `### Non-Functional` | Explicit value ("None" is acceptable) |
 | `## Acceptance Criteria` | Minimum 2 measurable checkbox items           |
 | `## Dependencies`    | Explicit value ("None" is acceptable)              |
 | `## Test Requirements` | At least one test expectation                    |
 | `## Status`          | Must be exactly `TODO`                             |
+
+The section names and order are those of the STRICT FORMAT in `.claude/agents/planner.md` and of `.claude/templates/TASK.md`.
 
 ---
 
@@ -39,8 +44,8 @@ The following sections MUST exist and MUST NOT be empty.
 ### FAIL conditions (regenerate required)
 
 - Any required section is missing
-- `## Goal` contains more than 2 sentences
-- `## Tasks` contains implementation details (class names, method names, annotations)
+- `## Summary` is not exactly one sentence (empty, or two or more sentences)
+- `## Goals` or `## Requirements` contains implementation details (class names, method names, annotations)
 - `## Acceptance Criteria` contains non-measurable items (e.g. "works correctly")
 - `## Status` is not `TODO`
 - TASK contains API design, package structure, or database schema
@@ -48,7 +53,7 @@ The following sections MUST exist and MUST NOT be empty.
 ### PASS conditions
 
 - All required sections present and non-empty
-- Goal is goal-oriented, not implementation-oriented
+- Summary and Goals are goal-oriented, not implementation-oriented
 - Acceptance criteria are verifiable
 - No architecture decisions included
 - Status is TODO
@@ -76,10 +81,13 @@ If found, TASK is INVALID.
 Run through this checklist before marking GATE 1 as passed.
 
 - [ ] `# TASK-{ID}` header exists
-- [ ] `## Goal` is one clear sentence
-- [ ] `## Scope` has at least one item
-- [ ] `## Out of Scope` has at least one item
-- [ ] `## Tasks` has at least 2 items
+- [ ] `## Summary` is exactly one sentence
+- [ ] `## Background` is filled
+- [ ] `## Goals` has at least one item
+- [ ] `### In Scope` has at least one item
+- [ ] `### Out of Scope` has at least one item
+- [ ] `### Functional` has at least one item
+- [ ] `### Non-Functional` is filled (even if "None")
 - [ ] `## Acceptance Criteria` has at least 2 checkbox items
 - [ ] `## Dependencies` is filled (even if "None")
 - [ ] `## Test Requirements` has at least 1 item

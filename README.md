@@ -213,8 +213,8 @@ TASK 상태는 파이프라인의 단일 진실 원천입니다.
 
 ```
 dev-agent/
-├── AGENTS.md                          # 프로젝트 헌법과 Agent 실행 규칙
-├── CLAUDE.md                          # Claude 기반 Agent 지침
+├── AGENTS.md                          # 프로젝트 헌법과 Agent 실행 규칙 (원본)
+├── CLAUDE.md                          # AGENTS.md를 불러오는 참조 (@AGENTS.md)
 │
 ├── .github/workflows/
 │   ├── planner.yml                    # Issue → TASK

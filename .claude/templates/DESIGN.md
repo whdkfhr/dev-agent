@@ -1,14 +1,14 @@
 # DESIGN-{ID}
 
-## 1. Overview
+## Overview
 
-이 설계가 해결하는 문제
+이 설계가 해결하는 문제와 범위
 
 ---
 
-## 2. Architecture Overview
+## Architecture Overview
 
-### System Structure
+레이어 구조 및 컴포넌트 다이어그램 (텍스트)
 
 * Controller Layer
 * Service Layer
@@ -17,9 +17,9 @@
 
 ---
 
-## 3. API Design
+## API Design
 
-### Endpoint: POST /example
+### POST /example
 
 Request:
 
@@ -28,7 +28,7 @@ Request:
 }
 ```
 
-Response:
+Response 201:
 
 ```json
 {
@@ -37,12 +37,14 @@ Response:
 
 Error:
 
-* 400
-* 500
+* 400: 이유
+* 500: 이유
+
+엔드포인트마다 HTTP Method, Path, Request body(해당 시), 성공 상태 코드가 붙은 Response body, 상태 코드별 Error 사유를 모두 적는다.
 
 ---
 
-## 4. Data Model
+## Data Model
 
 ### Entity: Example
 
@@ -51,47 +53,51 @@ Error:
 | id    | Long   | PK          |
 | name  | String | 이름          |
 
+Relationships: 없음 (있으면 대상 Entity와 관계를 적는다)
+
 ---
 
-## 5. Package Structure
+## Package Structure
 
 ```
-com.project
- ├── controller
- ├── service
- ├── domain
- ├── repository
- ├── dto
+com.arok2.dev_agent
+ ├── controller/
+ ├── service/
+ ├── domain/
+ ├── repository/
+ └── dto/
 ```
 
 ---
 
-## 6. Key Design Decisions
+## Key Design Decisions
 
-* Decision 1
-* Decision 2
-
----
-
-## 7. Trade-offs
-
-| Option | Pros | Cons |
-| ------ | ---- | ---- |
-| A      | ...  | ...  |
-| B      | ...  | ...  |
+* Decision 1: 이유
+* Decision 2: 이유
 
 ---
 
-## 8. Non-Functional Design
+## Trade-offs
 
-* Performance 고려
-* Security 고려
-* Scalability 고려
+| Option | Pros | Cons | Selected |
+| ------ | ---- | ---- | -------- |
+| A      | ...  | ...  | ✅        |
+| B      | ...  | ...  |          |
 
 ---
 
-## 9. Implementation Guide (for Implementer)
+## Non-Functional Design
 
-* Step 1
-* Step 2
-* Step 3
+* 성능: ...
+* 보안: ...
+* 확장성: ...
+
+---
+
+## Implementation Guide
+
+Implementer를 위한 구현 순서 및 주의사항
+
+1. Step 1
+2. Step 2
+3. Step 3
