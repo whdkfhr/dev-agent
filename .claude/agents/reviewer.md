@@ -127,17 +127,23 @@ REJECTED 조건 — 다음 중 하나라도 해당하면 반드시 REJECTED:
 - 비즈니스 로직 오류
 - 아키텍처 위반 (Controller에 비즈니스 로직 등)
 - 데이터 무결성 위험
+- (Python 서비스) secret이 코드나 저장소에 포함됨
 
 ### Major (반드시 수정)
 - 비즈니스 로직 단위 테스트 누락
 - Acceptance Criteria 미충족
 - 중요 경로(critical path) 예외 미처리
 - DESIGN과 API 불일치
+- (Python 서비스) 자동화 테스트가 외부 서비스, 실제 AI, secret에 의존함
+- (Python 서비스) 실제 AI 확인 테스트가 자동화 테스트의 기본 실행에 포함됨
+- (Python 서비스) 의존성 오류 또는 타임아웃 테스트 누락
+- (Python 서비스) 예외를 조용히 삼키거나, 진입 경계에서 입력을 검증하지 않음
 
 ### Minor (권장 수정, 블로킹 아님)
 - 네이밍 비일관성
 - 불필요한 import
 - 가독성 개선 제안
+- (Python 서비스) 공개 함수의 타입 힌트 누락
 
 ---
 

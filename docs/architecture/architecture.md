@@ -14,6 +14,7 @@ AI Agent 기반 개발자 작업 자동화 시스템의 전체 아키텍처 문�
 | Database    | PostgreSQL (Phase 3, 예정)     |
 | Cache       | Redis (Phase 3, 예정)          |
 | Messaging   | GitHub Webhook (Phase 4, 예정) |
+| Language (로그 분석 서비스) | Python 3.12, FastAPI, uv (ADR-007) |
 
 ## Architecture Style
 **Layered Architecture** (향후 Hexagonal 전환 고려)
@@ -175,6 +176,36 @@ ChatClient와 ToolCallingAdvisor를 통해 LLM tool calling loop에 연결합니
 └── ISSUE_TEMPLATE/
     └── feature-request.yml  # 구조화된 이슈 입력 포맷
 ```
+
+## Log Analysis Service (Python)
+
+테스트 실행 로그를 입력받아 원인 후보, 로그에 실제 존재하는 근거, 다음 확인 사항을 반환하는 독립 서비스입니다. 결정과 근거는 ADR-007에 있습니다.
+
+| 항목 | 내용 |
+|------|------|
+| 위치 | `services/log-analyzer/` |
+| 실행 단위 | Spring 애플리케이션과 독립 실행, 코드·빌드 공유 없음 |
+| 입력 | 사람이 수동으로 넣는 테스트 실행 로그 |
+| 출력 | 원인 후보, 근거, 다음 확인 사항 |
+| 상태 | stateless (영속 저장 없음) |
+| 범위 밖 | Spring 연동, 배포, 이 서비스를 실행하는 워크플로 |
+
+Failure Analyzer와의 경계
+
+| 항목 | Failure Analyzer | 로그 분석 서비스 |
+|------|------------------|------------------|
+| 입력 | Reviewer 리포트, TASK, DESIGN, PR diff | 사람이 넣은 테스트 실행 로그 |
+| 출력 | `FIX-ANALYSIS-{ID}-retry{N}.md` | API 응답 |
+| 실행 | GitHub Actions 워크플로 | 독립 HTTP 서비스 |
+
+두 기능은 서로 호출하지 않습니다.
+
+단계
+
+1. 가짜 분석기로 API와 정상·입력 오류·분석기 오류·타임아웃 테스트 완성
+2. 실제 AI 모델 연결, 외부 호출의 오류·타임아웃과 응답 결과를 별도 테스트로 확인
+
+자동화 테스트는 외부 서비스, 실제 AI, secret 없이 실행합니다. 서비스 내부 구조는 각 단계의 DESIGN에서 정합니다.
 
 ## Required GitHub Secrets
 

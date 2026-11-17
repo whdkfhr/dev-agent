@@ -16,6 +16,20 @@ GATE 3 depends on this validator passing.
 
 ---
 
+## Scope by Service
+
+| Service | Categories applied |
+| ------- | ------------------ |
+| Spring service (`src/`) | Category 1, 2, 3, 4, 5 and Architecture Violation Detection |
+| Python service (`services/<name>/`) | Category 1, 2 and Category 6 |
+
+### GATE 3 "Source code compiles" for Python services
+
+- Baseline: syntax check of all source and test files passes, and the automated tests pass.
+- The exact scope of import and startup verification is defined in that service's DESIGN. This validator does not require importing every module unconditionally.
+
+---
+
 ## Validation Categories
 
 ### Category 1 — Completeness
@@ -32,11 +46,11 @@ Code must match DESIGN document exactly.
 
 - [ ] Package structure matches `## Package Structure` in DESIGN
 - [ ] API endpoints match `## API Design` in DESIGN (path, method, request, response)
-- [ ] Entity fields match `## Data Model` in DESIGN
+- [ ] Entity or Model fields match `## Data Model` in DESIGN
 - [ ] No additional endpoints added without DESIGN approval
-- [ ] No layer violations (Controller must not contain business logic)
+- [ ] No layer violations as defined in DESIGN (Spring: Controller must not contain business logic)
 
-### Category 3 — Coding Standards
+### Category 3 — Coding Standards (Spring service)
 
 - [ ] Constructor injection only (no `@Autowired` field injection)
 - [ ] No business logic in Controller layer
@@ -46,7 +60,7 @@ Code must match DESIGN document exactly.
 - [ ] Global exception handler (`@RestControllerAdvice`) exists or referenced
 - [ ] No silent exception catching without logging
 
-### Category 4 — Test Requirements
+### Category 4 — Test Requirements (Spring service)
 
 - [ ] Unit tests exist for all Service methods with business logic
 - [ ] Controller tests exist for all endpoints
@@ -54,11 +68,43 @@ Code must match DESIGN document exactly.
 - [ ] External dependencies are mocked in unit tests
 - [ ] Tests do not test framework behavior (Spring handles that)
 
-### Category 5 — Java 17 Standards
+### Category 5 — Java 17 Standards (Spring service)
 
 - [ ] No deprecated APIs used
 - [ ] Records used for immutable DTOs where appropriate
 - [ ] No unnecessary null checks on framework-managed objects
+
+---
+
+### Category 6 — Python Common Standards (Python service)
+
+Structure, module layout and the exception handling mechanism follow the service's DESIGN. This category does not require a specific structure.
+
+Input validation
+- [ ] External input is validated against a schema at the entry boundary
+- [ ] Size and format limits defined in DESIGN are enforced
+- [ ] Invalid input is rejected with the 4xx status code defined in DESIGN and a message that identifies the cause
+
+Error handling
+- [ ] No exception is silently swallowed
+- [ ] Client input errors, dependency errors and timeouts are distinguished and returned as defined in DESIGN
+- [ ] Error responses do not expose stack traces, secrets or internal paths
+
+External dependency substitution
+- [ ] External dependencies (AI models, other services) sit behind a replaceable boundary
+- [ ] Automated tests replace external dependencies with fake implementations
+
+Tests
+- [ ] Tests use pytest
+- [ ] Automated tests run without external services, real AI or secrets (FastAPI's local test client is allowed)
+- [ ] Normal, invalid input, dependency failure and timeout cases are tested deterministically
+- [ ] Checks against a real AI are separate tests that run only when explicitly invoked, and are excluded from the default automated test run
+- [ ] Test input data such as logs is hand-made
+
+Types and dependencies
+- [ ] Public functions and models have type hints
+- [ ] Dependency versions are pinned in a lock file
+- [ ] No secret in code or in the repository
 
 ---
 
@@ -74,6 +120,13 @@ Code must match DESIGN document exactly.
 | Silent exception catch without logging          | MAJOR    |
 | Missing test assertions (empty test body)       | MAJOR    |
 | Unused imports or dead code                     | MINOR    |
+| (Python) Secret in code or repository           | CRITICAL |
+| (Python) Automated test depends on external service, real AI or secret | MAJOR |
+| (Python) Missing dependency failure or timeout test | MAJOR |
+| (Python) Exception silently swallowed           | MAJOR    |
+| (Python) Input not validated at entry boundary  | MAJOR    |
+| (Python) Real AI check included in default automated test run | MAJOR |
+| (Python) Missing type hints on public functions | MINOR    |
 
 CRITICAL or MAJOR violations → must fix before GATE 3 passes.
 
@@ -82,6 +135,8 @@ MINOR violations → fix recommended but not blocking.
 ---
 
 ## Architecture Violation Detection
+
+Applies to the Spring service. For Python services, check against the structure defined in DESIGN.
 
 Check each file category:
 
@@ -132,6 +187,11 @@ Run through before marking GATE 3 passed.
 - [ ] Unit tests for all Service logic
 - [ ] Controller tests for all endpoints
 - [ ] Meaningful assertions
+
+**Python service**
+- [ ] Syntax check and automated tests pass
+- [ ] Import and startup verification done as defined in DESIGN
+- [ ] Category 6 has no CRITICAL or MAJOR violation
 
 ---
 
