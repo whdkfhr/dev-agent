@@ -121,7 +121,7 @@ Common Test Assertions는 모든 서비스에 적용한다. 아래 Layer Rules, 
 
 ### Common Test Assertions
 - 각 테스트는 확인하려는 응답이나 동작에 맞는 assertion을 둔다
-- API 응답 테스트는 정상 응답과 오류 응답 모두 상태 코드와, 그 테스트가 확인하려는 응답 본문의 내용을 검증한다
+- API 응답 테스트는 정상 응답과 오류 응답 모두 상태 코드를 검증한다. 본문이 있는 응답은 그 테스트가 확인하려는 본문 내용을 검증하고, 본문이 없는 응답(204 No Content 등)은 본문이 비어 있음을 검증한다
 - 존재 여부만 확인하는 assertion(`assertNotNull`, `is not None` 등)만으로 테스트를 끝내지 않는다
 
 ### Layer Rules

@@ -39,7 +39,7 @@ All items in TASK `## Requirements` → `### Functional` section must be impleme
 - [ ] Every functional requirement has corresponding code
 - [ ] Every functional requirement has corresponding test
 - [ ] All `## Acceptance Criteria` are addressed
-- [ ] Each test asserts the response or behavior it intends to verify. API tests check the status code and the response body content they target, for both normal and error responses, not only existence (`assertNotNull`, `is not None`)
+- [ ] Each test asserts the response or behavior it intends to verify. API tests check the status code for both normal and error responses. A response with a body is checked for the body content the test targets, and a response without a body (such as 204 No Content) is checked for an empty body. Assertions do not check only existence (`assertNotNull`, `is not None`)
 
 ### Category 2 — Architecture Compliance
 
@@ -177,7 +177,7 @@ Run through before marking GATE 3 passed. Apply the common items to every servic
 - [ ] API matches DESIGN spec
 - [ ] Data model (Entity or Model) matches DESIGN spec
 - [ ] No unauthorized additions
-- [ ] Meaningful assertions that match the response or behavior under test, including error responses
+- [ ] Meaningful assertions that match the response or behavior under test, including error responses (status code, plus target body content or an empty body for responses without one)
 
 **Spring service only (Category 3, 4, 5 and Architecture Violation Detection)**
 - [ ] Constructor injection everywhere
