@@ -88,4 +88,4 @@ GitHub Issue: #15
 - 실제 AI를 호출하는 테스트는 이번 범위에 포함하지 않는다
 
 ## Status
-TODO
+IN_PROGRESS
