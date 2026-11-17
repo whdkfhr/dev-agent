@@ -25,6 +25,7 @@ Reviewer MUST produce a structured report with all of the following.
 | Field                    | Required Content                                     |
 | ------------------------ | ---------------------------------------------------- |
 | Review Result            | Exactly `APPROVED` or `REJECTED`                     |
+| Review Basis             | Base commit and reviewed head commit of the diff     |
 | Summary                  | 2–5 sentence evaluation of the overall implementation|
 | Issues Found             | Categorized list (Critical / Major / Minor)          |
 | Architecture Compliance  | `PASS` or `FAIL` with explanation                    |
@@ -39,6 +40,7 @@ Reviewer MUST produce a structured report with all of the following.
 
 - Review Result is missing
 - Review Result is neither `APPROVED` nor `REJECTED`
+- Review Basis is missing or does not name both commits
 - Issues Found section is empty when result is REJECTED
 - Architecture Compliance verdict is missing
 - Test Coverage verdict is missing
@@ -118,6 +120,10 @@ Reviewer MUST produce output in this format.
 ## Review Result
 APPROVED | REJECTED
 
+## Review Basis
+- Base commit: [commit of the base branch the diff was taken against]
+- Reviewed head commit: [commit of the feature branch that was reviewed]
+
 ## Summary
 [2-5 sentences]
 
@@ -163,6 +169,7 @@ Reviewer MUST NOT:
 ## Validation Checklist
 
 - [ ] Review Result is present (`APPROVED` or `REJECTED`)
+- [ ] Review Basis names the base commit and the reviewed head commit
 - [ ] Summary is substantive (not empty)
 - [ ] Issues Found section categorized (Critical / Major / Minor)
 - [ ] Architecture Compliance verdict present with explanation
@@ -186,12 +193,33 @@ After 3 consecutive REJECTED results → escalate to user.
 
 ---
 
-## TASK Status Update
+## Review Input
 
-After APPROVED:
+The review is performed before the Pull Request is created.
+
+Reviewer reviews the diff between the base branch and the feature branch and records both commits in `## Review Basis`.
+
+---
+
+## After APPROVED
+
+1. TASK status remains `IN_REVIEW`. Reviewer does not set `DONE`.
+2. The Pull Request is created. It is never created before APPROVED.
+3. After the Pull Request has actually been created, the work owner after PR creation updates the TASK file:
 
 ```
 Status: DONE
 ```
 
-Proceed to Git Commit and Pull Request creation.
+`DONE` means that the Pull Request has been created. It does not mean that it has been merged.
+
+---
+
+## After the Pull Request Is Created
+
+The user compares the reviewed head commit with the final HEAD of the Pull Request.
+
+The earlier APPROVED is not relied on, and the change is reviewed again, when either of the following is true:
+
+- the difference contains anything other than the status change of that TASK
+- changes on the base branch could affect the review result

@@ -1,12 +1,12 @@
 # DESIGN-{ID}
 
-## 1. Overview
+## Overview
 
 이 설계가 해결하는 문제
 
 ---
 
-## 2. Architecture Overview
+## Architecture Overview
 
 ### System Structure
 
@@ -17,7 +17,7 @@
 
 ---
 
-## 3. API Design
+## API Design
 
 ### Endpoint: POST /example
 
@@ -42,7 +42,7 @@ Error:
 
 ---
 
-## 4. Data Model
+## Data Model
 
 ### Entity: Example
 
@@ -53,7 +53,7 @@ Error:
 
 ---
 
-## 5. Package Structure
+## Package Structure
 
 ```
 com.project
@@ -66,14 +66,14 @@ com.project
 
 ---
 
-## 6. Key Design Decisions
+## Key Design Decisions
 
 * Decision 1
 * Decision 2
 
 ---
 
-## 7. Trade-offs
+## Trade-offs
 
 | Option | Pros | Cons |
 | ------ | ---- | ---- |
@@ -82,7 +82,7 @@ com.project
 
 ---
 
-## 8. Non-Functional Design
+## Non-Functional Design
 
 * Performance 고려
 * Security 고려
@@ -90,7 +90,7 @@ com.project
 
 ---
 
-## 9. Implementation Guide (for Implementer)
+## Implementation Guide
 
 * Step 1
 * Step 2

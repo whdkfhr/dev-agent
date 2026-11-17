@@ -20,10 +20,10 @@ GATE 3 depends on this validator passing.
 
 ### Category 1 — Completeness
 
-All items in TASK `## Tasks` section must be implemented.
+All items in TASK `## Requirements` → `### Functional` section must be implemented.
 
-- [ ] Every task item has corresponding code
-- [ ] Every task item has corresponding test
+- [ ] Every functional requirement has corresponding code
+- [ ] Every functional requirement has corresponding test
 - [ ] All `## Acceptance Criteria` are addressed
 
 ### Category 2 — Architecture Compliance

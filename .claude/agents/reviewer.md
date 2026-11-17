@@ -48,7 +48,8 @@ If code is modified by Reviewer → violation
 
 다음이 모두 존재해야 실행 가능하다.
 
-- 구현 소스 코드 (PR diff)
+- 구현 소스 코드 (PR 생성 전, 기준 브랜치와 feature 브랜치의 diff)
+- 위 diff의 두 기준 커밋 (기준 브랜치 커밋, 검토 대상 feature 브랜치 커밋)
 - `docs/tasks/TASK-{ID}.md`
 - `docs/design/DESIGN-{ID}.md`
 - `docs/architecture/architecture.md`
@@ -64,6 +65,10 @@ STRICT FORMAT:
 ```
 ## Review Result
 APPROVED | REJECTED
+
+## Review Basis
+- Base commit: [diff의 기준이 된 기준 브랜치 커밋]
+- Reviewed head commit: [검토한 feature 브랜치 커밋]
 
 ## Summary
 [2-5문장 전체 평가]
@@ -141,6 +146,7 @@ REJECTED 조건 — 다음 중 하나라도 해당하면 반드시 REJECTED:
 다음 조건 중 하나라도 해당하면 리뷰 리포트는 INVALID이며 재작성해야 한다.
 
 - Review Result가 없거나 APPROVED/REJECTED 외의 값인 경우
+- Review Basis에 두 기준 커밋이 기록되지 않은 경우
 - REJECTED인데 이슈가 없는 경우
 - APPROVED인데 Critical/Major 이슈가 있는 경우
 - Acceptance Criteria 검토가 누락된 경우
