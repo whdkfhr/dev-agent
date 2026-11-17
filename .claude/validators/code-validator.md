@@ -16,6 +16,20 @@ GATE 3 depends on this validator passing.
 
 ---
 
+## Scope by Service
+
+| Service | Categories applied |
+| ------- | ------------------ |
+| Spring service (`src/`) | Category 1, 2, 3, 4, 5 and Architecture Violation Detection |
+| Python service (`services/<name>/`) | Category 1, 2 and Category 6 |
+
+### GATE 3 "Source code compiles" for Python services
+
+- Baseline: syntax check of all source and test files passes, and the automated tests pass.
+- The exact scope of import and startup verification is defined in that service's DESIGN. This validator does not require importing every module unconditionally.
+
+---
+
 ## Validation Categories
 
 ### Category 1 — Completeness
@@ -25,6 +39,7 @@ All items in TASK `## Requirements` → `### Functional` section must be impleme
 - [ ] Every functional requirement has corresponding code
 - [ ] Every functional requirement has corresponding test
 - [ ] All `## Acceptance Criteria` are addressed
+- [ ] Each test asserts the response or behavior it intends to verify. API tests check the status code for both normal and error responses. A response with a body is checked for the body content the test targets, and a response without a body (such as 204 No Content) is checked for an empty body. Assertions do not check only existence (`assertNotNull`, `is not None`)
 
 ### Category 2 — Architecture Compliance
 
@@ -32,11 +47,11 @@ Code must match DESIGN document exactly.
 
 - [ ] Package structure matches `## Package Structure` in DESIGN
 - [ ] API endpoints match `## API Design` in DESIGN (path, method, request, response)
-- [ ] Entity fields match `## Data Model` in DESIGN
+- [ ] Entity or Model fields match `## Data Model` in DESIGN
 - [ ] No additional endpoints added without DESIGN approval
-- [ ] No layer violations (Controller must not contain business logic)
+- [ ] No layer violations as defined in DESIGN (Spring: Controller must not contain business logic)
 
-### Category 3 — Coding Standards
+### Category 3 — Coding Standards (Spring service)
 
 - [ ] Constructor injection only (no `@Autowired` field injection)
 - [ ] No business logic in Controller layer
@@ -46,19 +61,53 @@ Code must match DESIGN document exactly.
 - [ ] Global exception handler (`@RestControllerAdvice`) exists or referenced
 - [ ] No silent exception catching without logging
 
-### Category 4 — Test Requirements
+### Category 4 — Test Requirements (Spring service)
 
 - [ ] Unit tests exist for all Service methods with business logic
 - [ ] Controller tests exist for all endpoints
-- [ ] Tests use meaningful assertions (not just `assertNotNull`)
 - [ ] External dependencies are mocked in unit tests
 - [ ] Tests do not test framework behavior (Spring handles that)
 
-### Category 5 — Java 17 Standards
+### Category 5 — Java 17 Standards (Spring service)
 
 - [ ] No deprecated APIs used
 - [ ] Records used for immutable DTOs where appropriate
 - [ ] No unnecessary null checks on framework-managed objects
+
+---
+
+### Category 6 — Python Common Standards (Python service)
+
+Structure, module layout and the exception handling mechanism follow the service's DESIGN. This category does not require a specific structure.
+
+Input validation
+- [ ] External input is validated against a schema at the entry boundary
+- [ ] Size and format limits defined in DESIGN are enforced
+- [ ] Invalid input is rejected with the 4xx status code defined in DESIGN and a message that identifies the cause
+
+Error handling
+- [ ] No exception is silently swallowed
+- [ ] Client input errors, dependency errors and timeouts are distinguished and returned as defined in DESIGN
+- [ ] Error responses do not expose stack traces, secrets or internal paths
+
+External dependency substitution
+- [ ] External dependencies (AI models, other services) sit behind a replaceable boundary
+- [ ] Automated tests replace external dependencies with fake implementations
+
+Tests
+- [ ] Tests use pytest
+- [ ] Automated tests run without external services, real AI or secrets (FastAPI's local test client is allowed)
+- [ ] Normal, invalid input, dependency failure and timeout cases are tested deterministically
+- [ ] Checks against a real AI are separate tests that run only when explicitly invoked, and are excluded from the default automated test run
+- [ ] Test input data such as logs is hand-made, kept either in test code or in fixture files on paths allowed by DESIGN (fixture files are optional)
+
+Types and dependencies
+- [ ] Public functions and models have type hints
+- [ ] Dependency versions are pinned in a lock file
+- [ ] No secret in code or in the repository
+
+Files
+- [ ] Only files allowed by `.claude/agents/implementer.md` Output are created (source files, test files and optional test fixture files on paths allowed by DESIGN, `pyproject.toml`, `uv.lock`)
 
 ---
 
@@ -74,6 +123,13 @@ Code must match DESIGN document exactly.
 | Silent exception catch without logging          | MAJOR    |
 | Missing test assertions (empty test body)       | MAJOR    |
 | Unused imports or dead code                     | MINOR    |
+| (Python) Secret in code or repository           | CRITICAL |
+| (Python) Automated test depends on external service, real AI or secret | MAJOR |
+| (Python) Missing dependency failure or timeout test | MAJOR |
+| (Python) Exception silently swallowed           | MAJOR    |
+| (Python) Input not validated at entry boundary  | MAJOR    |
+| (Python) Real AI check included in default automated test run | MAJOR |
+| (Python) Missing type hints on public functions | MINOR    |
 
 CRITICAL or MAJOR violations → must fix before GATE 3 passes.
 
@@ -82,6 +138,8 @@ MINOR violations → fix recommended but not blocking.
 ---
 
 ## Architecture Violation Detection
+
+Applies to the Spring service. For Python services, check against the structure defined in DESIGN.
 
 Check each file category:
 
@@ -110,28 +168,31 @@ Check each file category:
 
 ## Validation Checklist
 
-Run through before marking GATE 3 passed.
+Run through before marking GATE 3 passed. Apply the common items to every service, and the items for the service being changed.
 
-**Completeness**
+**Common (Category 1, 2)**
 - [ ] All TASK items implemented
 - [ ] All acceptance criteria addressed
-
-**Architecture**
-- [ ] Package structure matches DESIGN
+- [ ] Package or module structure matches DESIGN
 - [ ] API matches DESIGN spec
-- [ ] Data model matches DESIGN spec
+- [ ] Data model (Entity or Model) matches DESIGN spec
 - [ ] No unauthorized additions
+- [ ] Meaningful assertions that match the response or behavior under test, including error responses (status code, plus target body content or an empty body for responses without one)
 
-**Standards**
+**Spring service only (Category 3, 4, 5 and Architecture Violation Detection)**
 - [ ] Constructor injection everywhere
 - [ ] No business logic in Controller
 - [ ] DTOs used for API contract
-- [ ] Exception handling present
-
-**Tests**
+- [ ] Global exception handling present
 - [ ] Unit tests for all Service logic
 - [ ] Controller tests for all endpoints
-- [ ] Meaningful assertions
+- [ ] Java 17 standards met
+
+**Python service only (Category 6)**
+- [ ] Syntax check and automated tests pass
+- [ ] Import and startup verification done as defined in DESIGN
+- [ ] Only files allowed by `.claude/agents/implementer.md` Output are created
+- [ ] Category 6 has no CRITICAL or MAJOR violation
 
 ---
 

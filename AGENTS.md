@@ -2,7 +2,7 @@
 
 # Dev-Agent Project Constitution
 
-Version: 1.1
+Version: 1.2
 
 ---
 
@@ -189,9 +189,21 @@ Agents should NOT:
 
 Technology Stack
 
+Spring service (`src/`)
+
 * Java 17
 * Spring Boot
 * Gradle
+
+Log analysis service (`services/log-analyzer/`, ADR-007)
+
+* Python 3.12
+* FastAPI
+* uv
+
+Coding Style and Preferred Packages below apply to the Spring service.
+
+The Python service follows the common Python standards in `.claude/agents/implementer.md` and `.claude/validators/code-validator.md`, and its structure is defined in its DESIGN.
 
 Coding Style
 
@@ -326,7 +338,7 @@ These rules override everything else within the scope defined in 12.0.
 
 The gates, locks, state machine and forbidden behaviors in this section apply to product changes:
 
-- any change under `src/`, including tests
+- any change under `src/` or `services/`, including tests
 - API contracts and data models
 - a new service or a new executable unit
 - build, runtime and deployment configuration
@@ -494,7 +506,7 @@ These are hard violations. No exceptions.
 - Writing code before `TASK-{ID}.md` exists
 - Writing code before `DESIGN-{ID}.md` exists
 - Creating PR before Reviewer APPROVED
-- Architect writing Java code
+- Architect writing implementation code
 - Implementer changing architecture without approval
 - Reviewer rewriting code instead of reporting issues
 - Any agent guessing missing requirements

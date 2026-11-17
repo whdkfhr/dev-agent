@@ -16,6 +16,14 @@ GATE 2 depends on this validator passing.
 
 ---
 
+## Applicability
+
+The criteria in this file, as revised by ADR-007, apply to DESIGN documents that are newly written, or that go through GATE 2 again, after ADR-007 was merged into develop.
+
+DESIGN documents written before that and not validated again are not modified and are not re-validated against these criteria.
+
+---
+
 ## Required Sections
 
 The following sections MUST exist and MUST NOT be empty.
@@ -26,9 +34,10 @@ The following sections MUST exist and MUST NOT be empty.
 | `## Overview`              | Problem statement this design solves                |
 | `## Architecture Overview` | Layer structure described                           |
 | `## API Design`            | At least one endpoint defined with request/response |
-| `## Data Model`            | At least one entity defined with fields             |
-| `## Package Structure`     | Package breakdown defined                           |
+| `## Data Model`            | At least one Entity or Model defined with fields    |
+| `## Package Structure`     | Package or module breakdown defined                 |
 | `## Key Design Decisions`  | At least one decision documented                    |
+| `## Trade-offs`            | Options reviewed and the reason for the selection, or "대안 없음" with a reason |
 | `## Implementation Guide`  | Step-by-step guide for Implementer                  |
 
 ---
@@ -39,9 +48,11 @@ The following sections MUST exist and MUST NOT be empty.
 
 - Any required section is missing
 - `## API Design` has no endpoint definitions
-- `## Data Model` has no entity definitions
+- `## Data Model` has no Entity or Model definitions
+- `## Trade-offs` has no reason for the selection, or states no alternative without a reason
+- An endpoint that calls an external dependency has no timeout value, or no status code for dependency failure and timeout
 - `## Implementation Guide` is empty or vague
-- Design contains actual Java code (only structure allowed)
+- Design contains actual implementation code in any language (only structure allowed)
 - Design contradicts existing `docs/architecture/architecture.md`
 - Design introduces new architecture pattern not in ADR
 
@@ -49,10 +60,10 @@ The following sections MUST exist and MUST NOT be empty.
 
 - All required sections present
 - At least one API endpoint fully specified (method, path, request, response, error)
-- At least one entity with fields and types
-- Package structure matches project conventions
+- At least one Entity or Model with fields and types
+- Package structure matches project conventions for the service (Spring: `com.arok2.dev_agent`, Python: `services/<name>/`)
 - Implementation Guide is actionable (Implementer can start immediately)
-- No actual Java code written
+- No actual implementation code written
 
 ---
 
@@ -66,6 +77,7 @@ Each endpoint must include:
 - Response body schema
 - Success status code
 - Error cases and status codes
+- For an endpoint that calls an external dependency: the timeout value, and the status code and reason for dependency failure and for timeout
 
 Minimal acceptable format:
 
@@ -94,6 +106,22 @@ Each entity must include:
 - Primary key identified
 - Relationships (if any)
 
+A service without persistent storage defines Models (request, response, internal values) instead of Entities.
+
+Each model must include:
+
+- Model name
+- Field list with types and constraints
+- `Persistence: 없음`
+
+---
+
+## Trade-offs Requirements
+
+- List the options that were actually reviewed, with pros and cons, and mark the selected one.
+- State the reason for the selection.
+- If there was no real alternative, write "대안 없음" and the reason instead of the table.
+
 ---
 
 ## Forbidden Content in DESIGN
@@ -102,7 +130,7 @@ Architect MUST NOT include the following.
 
 If found, DESIGN is INVALID.
 
-- Java code blocks (Spring annotations, class definitions, method bodies)
+- Implementation code blocks in any language (Java, Python, framework annotations or decorators, class definitions, method or function bodies)
 - Business logic implementation
 - Test code
 - SQL DDL statements (logical model only, no CREATE TABLE)
@@ -115,11 +143,13 @@ If found, DESIGN is INVALID.
 - [ ] `## Overview` describes the problem
 - [ ] `## Architecture Overview` shows layer structure
 - [ ] `## API Design` has at least one full endpoint spec
-- [ ] `## Data Model` has at least one entity with fields
+- [ ] `## Data Model` has at least one Entity or Model with fields
 - [ ] `## Package Structure` is defined
 - [ ] `## Key Design Decisions` has at least one entry
+- [ ] `## Trade-offs` records the reason for the selection, or "대안 없음" with a reason
+- [ ] Endpoints that call an external dependency define timeout and failure status codes
 - [ ] `## Implementation Guide` is actionable
-- [ ] No Java code present
+- [ ] No implementation code present
 - [ ] Consistent with `docs/architecture/architecture.md`
 
 ---
