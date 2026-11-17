@@ -69,7 +69,7 @@ GitHub Issue: #15
 - [ ] 잘못된 입력, 분석기 오류, 타임아웃의 오류 응답이 서로 구분되며, 어느 오류 응답에도 스택 트레이스나 내부 경로가 포함되지 않는다
 - [ ] 자동화 테스트 전체가 네트워크와 secret 없이 통과한다
 - [ ] 타임아웃 테스트를 포함한 자동화 테스트 전체가 DESIGN에서 정한 시간 안에 끝난다
-- [ ] 변경 파일이 `services/log-analyzer/` 아래로 한정되며, `src/`, `.github/`, 기존 Spring·루트 빌드 구성은 변경되지 않는다 (서비스의 `pyproject.toml`과 `uv.lock`은 `services/log-analyzer/` 안에서 허용)
+- [ ] 서비스의 소스·테스트·설정 파일(`pyproject.toml`, `uv.lock` 포함)은 `services/log-analyzer/` 아래에만 있으며, 그 밖의 변경은 이 작업의 TASK·DESIGN 등 프로젝트 규칙상 필수 문서로 한정된다. `src/`, `.github/`, 기존 Spring·루트 빌드 구성은 변경되지 않는다
 
 ## Dependencies
 - ADR-007 (Accepted, develop `8b54227`)
