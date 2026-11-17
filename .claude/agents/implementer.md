@@ -61,7 +61,14 @@ If design is unclear → STOP and escalate
 
 ## Output
 
-소스 코드 파일과 테스트 코드 파일만 생성한다.
+아래 생성 대상에 해당하는 파일만 생성한다. 그 밖의 파일은 생성하지 않는다.
+
+| 서비스 | 생성할 수 있는 파일 |
+| ------ | ------------------- |
+| Spring 서비스 (`src/`) | 소스 코드 파일, 테스트 코드 파일 |
+| Python 서비스 (`services/<name>/`) | DESIGN이 허용한 경로의 소스 코드 파일과 테스트 코드 파일, 그 서비스 루트의 `pyproject.toml`과 의존성 lock 파일(`uv.lock`) |
+
+DESIGN에 없는 경로의 파일, 다른 서비스의 파일, 워크플로와 저장소 설정 파일은 생성하거나 수정하지 않는다. 필요하면 Architect에게 에스컬레이션한다.
 
 출력 파일 형식 (STRICT):
 
@@ -81,7 +88,17 @@ Python 서비스는 같은 형식으로 `services/<name>/` 아래 DESIGN이 정�
 --- FILE: services/<name>/{DESIGN이 정한 경로}.py ---
 # 소스 코드 또는 테스트 코드
 --- END FILE ---
+
+--- FILE: services/<name>/pyproject.toml ---
+# 프로젝트와 의존성 정의
+--- END FILE ---
+
+--- FILE: services/<name>/uv.lock ---
+# uv가 생성한 lock 파일
+--- END FILE ---
 ```
+
+`pyproject.toml`의 의존성은 DESIGN과 ADR-007의 기술 스택 범위 안에서만 정한다. `uv.lock`은 직접 작성하지 않고 uv로 생성한다.
 
 생성 대상 (Spring 서비스):
 - Controller (HTTP 레이어만)

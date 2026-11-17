@@ -106,6 +106,9 @@ Types and dependencies
 - [ ] Dependency versions are pinned in a lock file
 - [ ] No secret in code or in the repository
 
+Files
+- [ ] Only files allowed by `.claude/agents/implementer.md` Output are created (source and test files on paths allowed by DESIGN, `pyproject.toml`, `uv.lock`)
+
 ---
 
 ## FAIL Conditions (fix required)
@@ -165,32 +168,30 @@ Check each file category:
 
 ## Validation Checklist
 
-Run through before marking GATE 3 passed.
+Run through before marking GATE 3 passed. Apply the common items to every service, and the items for the service being changed.
 
-**Completeness**
+**Common (Category 1, 2)**
 - [ ] All TASK items implemented
 - [ ] All acceptance criteria addressed
-
-**Architecture**
-- [ ] Package structure matches DESIGN
+- [ ] Package or module structure matches DESIGN
 - [ ] API matches DESIGN spec
-- [ ] Data model matches DESIGN spec
+- [ ] Data model (Entity or Model) matches DESIGN spec
 - [ ] No unauthorized additions
 
-**Standards**
+**Spring service only (Category 3, 4, 5 and Architecture Violation Detection)**
 - [ ] Constructor injection everywhere
 - [ ] No business logic in Controller
 - [ ] DTOs used for API contract
-- [ ] Exception handling present
-
-**Tests**
+- [ ] Global exception handling present
 - [ ] Unit tests for all Service logic
 - [ ] Controller tests for all endpoints
 - [ ] Meaningful assertions
+- [ ] Java 17 standards met
 
-**Python service**
+**Python service only (Category 6)**
 - [ ] Syntax check and automated tests pass
 - [ ] Import and startup verification done as defined in DESIGN
+- [ ] Only files allowed by `.claude/agents/implementer.md` Output are created
 - [ ] Category 6 has no CRITICAL or MAJOR violation
 
 ---
