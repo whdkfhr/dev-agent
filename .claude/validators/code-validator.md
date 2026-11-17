@@ -39,6 +39,7 @@ All items in TASK `## Requirements` → `### Functional` section must be impleme
 - [ ] Every functional requirement has corresponding code
 - [ ] Every functional requirement has corresponding test
 - [ ] All `## Acceptance Criteria` are addressed
+- [ ] Each test asserts the response or behavior it intends to verify. API tests check the status code and the response body content they target, for both normal and error responses, not only existence (`assertNotNull`, `is not None`)
 
 ### Category 2 — Architecture Compliance
 
@@ -64,7 +65,6 @@ Code must match DESIGN document exactly.
 
 - [ ] Unit tests exist for all Service methods with business logic
 - [ ] Controller tests exist for all endpoints
-- [ ] Tests use meaningful assertions (not just `assertNotNull`)
 - [ ] External dependencies are mocked in unit tests
 - [ ] Tests do not test framework behavior (Spring handles that)
 
@@ -99,7 +99,7 @@ Tests
 - [ ] Automated tests run without external services, real AI or secrets (FastAPI's local test client is allowed)
 - [ ] Normal, invalid input, dependency failure and timeout cases are tested deterministically
 - [ ] Checks against a real AI are separate tests that run only when explicitly invoked, and are excluded from the default automated test run
-- [ ] Test input data such as logs is hand-made
+- [ ] Test input data such as logs is hand-made, kept either in test code or in fixture files on paths allowed by DESIGN (fixture files are optional)
 
 Types and dependencies
 - [ ] Public functions and models have type hints
@@ -107,7 +107,7 @@ Types and dependencies
 - [ ] No secret in code or in the repository
 
 Files
-- [ ] Only files allowed by `.claude/agents/implementer.md` Output are created (source and test files on paths allowed by DESIGN, `pyproject.toml`, `uv.lock`)
+- [ ] Only files allowed by `.claude/agents/implementer.md` Output are created (source files, test files and optional test fixture files on paths allowed by DESIGN, `pyproject.toml`, `uv.lock`)
 
 ---
 
@@ -177,6 +177,7 @@ Run through before marking GATE 3 passed. Apply the common items to every servic
 - [ ] API matches DESIGN spec
 - [ ] Data model (Entity or Model) matches DESIGN spec
 - [ ] No unauthorized additions
+- [ ] Meaningful assertions that match the response or behavior under test, including error responses
 
 **Spring service only (Category 3, 4, 5 and Architecture Violation Detection)**
 - [ ] Constructor injection everywhere
@@ -185,7 +186,6 @@ Run through before marking GATE 3 passed. Apply the common items to every servic
 - [ ] Global exception handling present
 - [ ] Unit tests for all Service logic
 - [ ] Controller tests for all endpoints
-- [ ] Meaningful assertions
 - [ ] Java 17 standards met
 
 **Python service only (Category 6)**

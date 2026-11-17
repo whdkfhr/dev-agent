@@ -66,7 +66,7 @@ If design is unclear → STOP and escalate
 | 서비스 | 생성할 수 있는 파일 |
 | ------ | ------------------- |
 | Spring 서비스 (`src/`) | 소스 코드 파일, 테스트 코드 파일 |
-| Python 서비스 (`services/<name>/`) | DESIGN이 허용한 경로의 소스 코드 파일과 테스트 코드 파일, 그 서비스 루트의 `pyproject.toml`과 의존성 lock 파일(`uv.lock`) |
+| Python 서비스 (`services/<name>/`) | DESIGN이 허용한 경로의 소스 코드 파일, 테스트 코드 파일, 테스트 fixture 파일(직접 만든 로그 등, 필요할 때만), 그 서비스 루트의 `pyproject.toml`과 의존성 lock 파일(`uv.lock`) |
 
 DESIGN에 없는 경로의 파일, 다른 서비스의 파일, 워크플로와 저장소 설정 파일은 생성하거나 수정하지 않는다. 필요하면 Architect에게 에스컬레이션한다.
 
@@ -87,6 +87,10 @@ Python 서비스는 같은 형식으로 `services/<name>/` 아래 DESIGN이 정�
 ```
 --- FILE: services/<name>/{DESIGN이 정한 경로}.py ---
 # 소스 코드 또는 테스트 코드
+--- END FILE ---
+
+--- FILE: services/<name>/{DESIGN이 허용한 fixture 경로} ---
+직접 만든 테스트 로그 등 (필요할 때만)
 --- END FILE ---
 
 --- FILE: services/<name>/pyproject.toml ---
@@ -113,7 +117,12 @@ Python 서비스는 같은 형식으로 `services/<name>/` 아래 DESIGN이 정�
 
 ## Coding Standards
 
-아래 Layer Rules, Java 17 Standards, Error Handling, Testing Standards는 Spring 서비스(`src/`)에 적용한다. Python 서비스는 Python Common Standards를 적용한다.
+Common Test Assertions는 모든 서비스에 적용한다. 아래 Layer Rules, Java 17 Standards, Error Handling, Testing Standards는 Spring 서비스(`src/`)에 적용한다. Python 서비스는 Python Common Standards를 적용한다.
+
+### Common Test Assertions
+- 각 테스트는 확인하려는 응답이나 동작에 맞는 assertion을 둔다
+- API 응답 테스트는 정상 응답과 오류 응답 모두 상태 코드와, 그 테스트가 확인하려는 응답 본문의 내용을 검증한다
+- 존재 여부만 확인하는 assertion(`assertNotNull`, `is not None` 등)만으로 테스트를 끝내지 않는다
 
 ### Layer Rules
 - Controller: HTTP 처리만, Service 호출만
@@ -162,7 +171,8 @@ Python 서비스(`services/<name>/`)에 적용하는 공통 원칙이다. 계층
 - 자동화 테스트는 외부 서비스, 실제 AI, secret 없이 실행한다. FastAPI의 로컬 테스트 클라이언트 사용은 허용한다
 - 정상, 잘못된 입력, 의존성 오류, 타임아웃을 결정적으로 검증한다. 타임아웃은 실제로 오래 기다리지 않도록 재현한다
 - 실제 AI를 호출하는 확인은 명시적으로 실행하는 별도 테스트로 구분하고, 자동화 테스트의 기본 실행에서 제외한다
-- 테스트에 쓰는 로그 등 입력 데이터는 직접 만든 것을 쓴다
+- 테스트에 쓰는 로그 등 입력 데이터는 직접 만든 것을 쓴다. 테스트 코드 안에 두거나, DESIGN이 허용한 경로의 fixture 파일로 둘 수 있다. fixture 파일은 필수가 아니다
+- 정상 응답과 오류 응답 테스트에 Common Test Assertions를 적용한다
 
 타입과 의존성
 - 공개 함수와 모델에 타입 힌트를 적는다
