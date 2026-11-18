@@ -6,6 +6,8 @@ from types import TracebackType
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from log_analyzer.analyzer import AnalyzerError
@@ -19,15 +21,34 @@ LOG_TOO_LARGE = "LOG_TOO_LARGE"
 ANALYZER_ERROR = "ANALYZER_ERROR"
 ANALYZER_TIMEOUT = "ANALYZER_TIMEOUT"
 INTERNAL_ERROR = "INTERNAL_ERROR"
+NOT_FOUND = "NOT_FOUND"
+METHOD_NOT_ALLOWED = "METHOD_NOT_ALLOWED"
+HTTP_ERROR = "HTTP_ERROR"
+
+# 라우팅 단계의 HTTP 오류: 상태 코드별 (code, 고정 메시지). 그 밖의 상태는 HTTP_ERROR (DESIGN-015 API Design).
+_HTTP_ERRORS = {
+    404: (NOT_FOUND, "요청한 경로를 찾을 수 없습니다."),
+    405: (METHOD_NOT_ALLOWED, "허용되지 않은 메서드입니다."),
+}
+_HTTP_ERROR_MESSAGE = "요청을 처리할 수 없습니다."
 
 
 class LogTooLargeError(Exception):
     """log가 크기 제한을 넘었다."""
 
 
-def error_response(status_code: int, code: str, message: str) -> JSONResponse:
+def error_response(
+    status_code: int, code: str, message: str, headers: dict[str, str] | None = None
+) -> JSONResponse:
     body = ErrorResponse(error=ErrorBody(code=code, message=message))
-    return JSONResponse(status_code=status_code, content=body.model_dump())
+    return JSONResponse(status_code=status_code, content=body.model_dump(), headers=headers)
+
+
+def _body_allowed(method: str, status_code: int) -> bool:
+    """HEAD 요청과 본문이 허용되지 않는 상태(1xx, 204, 304)에는 본문을 보내지 않는다."""
+    if method == "HEAD":
+        return False
+    return not (status_code < 200 or status_code in (204, 304))
 
 
 def _invalid_input_message(exc: RequestValidationError) -> str:
@@ -66,6 +87,21 @@ async def _handle_analyzer_error(request: Request, exc: AnalyzerError) -> JSONRe
 async def _handle_timeout(request: Request, exc: AnalysisTimeoutError) -> JSONResponse:
     logger.warning("analysis failed code=%s", ANALYZER_TIMEOUT)
     return error_response(504, ANALYZER_TIMEOUT, "분석이 제한 시간 안에 끝나지 않았습니다.")
+
+
+async def _handle_http_error(request: Request, exc: StarletteHTTPException) -> Response:
+    """라우팅 단계 등에서 난 HTTP 오류를 공통 형식으로 바꾼다.
+
+    원래 상태 코드와 오류가 지정한 헤더(405의 Allow 등)는 유지하고, detail 등 오류 상세는 노출하지 않는다.
+    요청 경로와 메서드는 로그에 남기지 않는다.
+    """
+    status_code = exc.status_code
+    code, message = _HTTP_ERRORS.get(status_code, (HTTP_ERROR, _HTTP_ERROR_MESSAGE))
+    headers = dict(exc.headers) if exc.headers else None
+    logger.warning("request rejected code=%s status=%d", code, status_code)
+    if not _body_allowed(request.method, status_code):
+        return Response(status_code=status_code, headers=headers)
+    return error_response(status_code, code, message, headers)
 
 
 def _failure_location(tb: TracebackType | None) -> str:
@@ -133,6 +169,7 @@ class UnexpectedErrorMiddleware:
 
 
 def register_error_handlers(app: FastAPI) -> None:
+    app.add_exception_handler(StarletteHTTPException, _handle_http_error)
     app.add_exception_handler(RequestValidationError, _handle_validation)
     app.add_exception_handler(LogTooLargeError, _handle_too_large)
     app.add_exception_handler(AnalyzerError, _handle_analyzer_error)

@@ -1,6 +1,8 @@
+import asyncio
 import logging
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from log_analyzer.app import create_app
@@ -240,7 +242,23 @@ def test_error_codes_are_distinct(failure_log):
         make_client(FakeAnalyzer(mode=FakeMode.ERROR)).post("/analyses", json={"log": failure_log}).json()["error"]["code"],
         make_client(FakeAnalyzer(mode=FakeMode.HANG), 0.05).post("/analyses", json={"log": failure_log}).json()["error"]["code"],
     }
-    assert codes == {"INVALID_INPUT", "LOG_TOO_LARGE", "ANALYZER_ERROR", "ANALYZER_TIMEOUT"}
+    client = make_client(FakeAnalyzer())
+    codes |= {
+        client.get("/missing").json()["error"]["code"],
+        client.get("/analyses").json()["error"]["code"],
+        make_client(BrokenAnalyzer()).post("/analyses", json={"log": failure_log}).json()["error"]["code"],
+        TestClient(app_with_raising_route(418), raise_server_exceptions=False).get("/raise").json()["error"]["code"],
+    }
+    assert codes == {
+        "INVALID_INPUT",
+        "LOG_TOO_LARGE",
+        "ANALYZER_ERROR",
+        "ANALYZER_TIMEOUT",
+        "INTERNAL_ERROR",
+        "NOT_FOUND",
+        "METHOD_NOT_ALLOWED",
+        "HTTP_ERROR",
+    }
 
 
 @pytest.mark.parametrize("raw", ["0", "-1", "abc", "nan", "inf"])
@@ -372,3 +390,122 @@ def test_blank_log_within_limit_still_returns_422_without_calling_analyzer(log):
     assert_error(response, 422, "INVALID_INPUT")
     assert response.json()["error"]["message"] == "log가 비어 있습니다."
     assert analyzer.call_count == 0
+
+
+# --- 라우팅 단계 HTTP 오류 (DESIGN-015 bfdefa2) ---
+
+SYNTHETIC_ROUTE = "/SYNTHETIC-PATH-91c2"
+SYNTHETIC_DETAIL = "SYNTHETIC-DETAIL-5e7a internal=/srv/synthetic-internal/app.py"
+
+
+def app_with_raising_route(status_code: int, headers: dict[str, str] | None = None):
+    """테스트 안에서만 만든 앱 인스턴스에 임시 경로를 붙인다. 서비스 코드에는 엔드포인트를 추가하지 않는다."""
+    app = create_app(analyzer=FakeAnalyzer(), settings=Settings(timeout_seconds=1.0))
+
+    async def raise_http_error() -> None:
+        raise HTTPException(status_code=status_code, detail=SYNTHETIC_DETAIL, headers=headers)
+
+    app.add_api_route("/raise", raise_http_error, methods=["GET"])
+    return app
+
+
+def call_asgi(app, method: str, path: str) -> tuple[int, dict[str, str], list[bytes]]:
+    """앱을 ASGI로 직접 호출해 앱이 보낸 상태 코드, 헤더, 본문 메시지를 모은다.
+
+    테스트 클라이언트(httpx)는 HEAD 응답의 본문을 버리므로, 앱이 본문을 보냈는지는 이 방법으로만 확인한다.
+    """
+    messages: list[dict] = []
+
+    async def receive() -> dict:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict) -> None:
+        messages.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": method,
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode(),
+        "root_path": "",
+        "query_string": b"",
+        "headers": [(b"host", b"testserver")],
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+    }
+    asyncio.run(app(scope, receive, send))
+    start = next(m for m in messages if m["type"] == "http.response.start")
+    headers = {key.decode().lower(): value.decode() for key, value in start["headers"]}
+    bodies = [m.get("body", b"") for m in messages if m["type"] == "http.response.body"]
+    return start["status"], headers, bodies
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_undefined_path_returns_404_not_found(method, caplog):
+    caplog.set_level(logging.DEBUG)
+    analyzer = FakeAnalyzer()
+    response = make_client(analyzer).request(method, SYNTHETIC_ROUTE, json={"log": "FAILED x"})
+
+    assert_error(response, 404, "NOT_FOUND")
+    assert response.json()["error"]["message"] == "요청한 경로를 찾을 수 없습니다."
+    assert "SYNTHETIC-PATH" not in response.text
+    assert analyzer.call_count == 0
+    app_messages = [r.getMessage() for r in caplog.records if r.name == "log_analyzer"]
+    # 애플리케이션 로그만 검사한다. caplog에는 테스트 클라이언트(httpx)가 남긴 요청 로그도 섞인다.
+    assert app_messages == ["request rejected code=NOT_FOUND status=404"]
+    assert all("SYNTHETIC-PATH" not in message for message in app_messages)
+
+
+@pytest.mark.parametrize("method", ["GET", "PUT", "PATCH", "DELETE", "OPTIONS"])
+def test_other_method_on_analyses_returns_405_with_allow_header(method):
+    analyzer = FakeAnalyzer()
+    response = make_client(analyzer).request(method, "/analyses")
+
+    assert_error(response, 405, "METHOD_NOT_ALLOWED")
+    assert response.json()["error"]["message"] == "허용되지 않은 메서드입니다."
+    assert response.headers["allow"] == "POST"
+    assert analyzer.call_count == 0
+
+
+def test_head_on_analyses_returns_405_without_body():
+    analyzer = FakeAnalyzer()
+    app = create_app(analyzer=analyzer, settings=Settings(timeout_seconds=1.0))
+    status, headers, bodies = call_asgi(app, "HEAD", "/analyses")
+
+    assert status == 405
+    assert headers["allow"] == "POST"
+    assert bodies and all(body == b"" for body in bodies)
+    assert analyzer.call_count == 0
+
+
+def test_head_on_undefined_path_returns_404_without_body():
+    analyzer = FakeAnalyzer()
+    app = create_app(analyzer=analyzer, settings=Settings(timeout_seconds=1.0))
+    status, headers, bodies = call_asgi(app, "HEAD", SYNTHETIC_ROUTE)
+
+    assert status == 404
+    assert bodies and all(body == b"" for body in bodies)
+    assert analyzer.call_count == 0
+
+
+def test_other_http_error_keeps_status_and_headers_without_detail():
+    app = app_with_raising_route(418, headers={"X-Synthetic-Header": "kept"})
+    response = TestClient(app, raise_server_exceptions=True).get("/raise")
+
+    assert_error(response, 418, "HTTP_ERROR")
+    assert response.json()["error"]["message"] == "요청을 처리할 수 없습니다."
+    assert response.headers["x-synthetic-header"] == "kept"
+    assert "SYNTHETIC-DETAIL" not in response.text
+    assert "synthetic-internal" not in response.text
+
+
+def test_http_error_with_bodyless_status_sends_no_body():
+    app = app_with_raising_route(304, headers={"X-Synthetic-Header": "kept"})
+    status, headers, bodies = call_asgi(app, "GET", "/raise")
+
+    assert status == 304
+    assert headers["x-synthetic-header"] == "kept"
+    assert all(body == b"" for body in bodies)
