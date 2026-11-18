@@ -1,6 +1,6 @@
 """요청, 응답, 오류, 분석기 결과 모델 (DESIGN-015 Data Model)."""
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 MAX_LOG_CHARS = 100_000
 
@@ -13,6 +13,9 @@ class AnalysisRequest(BaseModel):
     @field_validator("log")
     @classmethod
     def log_must_not_be_blank(cls, value: str) -> str:
+        # 크기 초과는 공백 여부와 관계없이 413이다. 여기서 422로 거절하지 않고 API 계층의 크기 검사에 맡긴다.
+        if len(value) > MAX_LOG_CHARS:
+            return value
         if not value.strip():
             raise ValueError("log must not be blank")
         return value
@@ -24,7 +27,7 @@ class Evidence(BaseModel):
 
 
 class Cause(BaseModel):
-    summary: str
+    summary: str = Field(min_length=1)
     evidence: list[Evidence]
 
 

@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+from pydantic import ValidationError
 
 from log_analyzer.analyzer import AnalyzerError
 from log_analyzer.fake_analyzer import FakeAnalyzer, FakeMode
@@ -41,6 +42,20 @@ def test_cause_without_verified_evidence_is_removed():
     response = verify_result(LOG, result)
     assert [cause.summary for cause in response.causes] == ["남는 원인"]
     assert response.excluded_evidence_count == 2
+
+
+def test_cause_summary_must_not_be_empty():
+    """회귀: Cause.summary는 1자 이상이다 (DESIGN-015 Data Model)."""
+    with pytest.raises(ValidationError):
+        Cause(summary="", evidence=[Evidence(line=1, text="line one")])
+
+
+def test_empty_summary_from_unvalidated_result_is_not_returned():
+    """회귀: 검증을 거치지 않은 빈 summary가 들어와도 성공 응답을 만들지 않는다."""
+    cause = Cause.model_construct(summary="", evidence=[Evidence(line=1, text="line one")])
+    result = AnalyzerResult.model_construct(causes=[cause], next_checks=[])
+    with pytest.raises(ValidationError):
+        verify_result(LOG, result)
 
 
 def test_blank_next_checks_are_removed():

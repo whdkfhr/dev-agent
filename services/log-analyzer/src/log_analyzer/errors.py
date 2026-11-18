@@ -5,6 +5,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from log_analyzer.analyzer import AnalyzerError
 from log_analyzer.schemas import ErrorBody, ErrorResponse
@@ -66,9 +67,46 @@ async def _handle_timeout(request: Request, exc: AnalysisTimeoutError) -> JSONRe
     return error_response(504, ANALYZER_TIMEOUT, "분석이 제한 시간 안에 끝나지 않았습니다.")
 
 
-async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
-    logger.exception("analysis failed code=%s", INTERNAL_ERROR)
-    return error_response(500, INTERNAL_ERROR, "내부 오류가 발생했습니다.")
+class UnexpectedErrorMiddleware:
+    """예상하지 못한 예외를 500 공통 형식으로 바꾼다.
+
+    예외 메시지와 스택 트레이스에는 입력 로그 원문, secret, 내부 경로가 들어갈 수 있으므로
+    로그에는 결과 코드와 예외 종류 이름만 남긴다 (DESIGN-015 보안).
+    Starlette의 `Exception` 핸들러는 응답 후 예외를 다시 던져 서버(uvicorn)가 스택 트레이스를
+    기록하므로 쓰지 않고, 이 미들웨어가 예외를 받아 응답을 끝낸다.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        response_started = False
+
+        async def send_wrapper(message: Message) -> None:
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except Exception as exc:
+            logger.error(
+                "analysis failed code=%s error_type=%s response_started=%s",
+                INTERNAL_ERROR,
+                type(exc).__name__,
+                response_started,
+            )
+            if response_started:
+                # 응답을 이미 보내기 시작해 500으로 바꿀 수 없다. 예외를 삼키지 않고 연결을 끊게 한다.
+                # 다시 던진 예외의 스택 트레이스는 서버가 기록할 수 있다.
+                raise
+            response = error_response(500, INTERNAL_ERROR, "내부 오류가 발생했습니다.")
+            await response(scope, receive, send)
 
 
 def register_error_handlers(app: FastAPI) -> None:
@@ -76,4 +114,4 @@ def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(LogTooLargeError, _handle_too_large)
     app.add_exception_handler(AnalyzerError, _handle_analyzer_error)
     app.add_exception_handler(AnalysisTimeoutError, _handle_timeout)
-    app.add_exception_handler(Exception, _handle_unexpected)
+    app.add_middleware(UnexpectedErrorMiddleware)
