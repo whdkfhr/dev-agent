@@ -65,10 +65,12 @@ def test_timeout_raises_timeout_error_and_cancels_analyzer():
     assert analyzer.cancelled is True
 
 
-def test_cause_with_empty_summary_is_removed_without_counting_its_evidence():
+
+@pytest.mark.parametrize("summary", ["", "   ", "\t\n "])
+def test_cause_with_blank_summary_is_removed_without_counting_its_evidence(summary):
     result = AnalyzerResult(
         causes=[
-            Cause(summary="", evidence=[Evidence(line=1, text="line one")]),
+            Cause(summary=summary, evidence=[Evidence(line=1, text="line one"), Evidence(line=2, text="not in log")]),
             Cause(summary="남는 원인", evidence=[Evidence(line=3, text="three")]),
         ]
     )
@@ -77,8 +79,7 @@ def test_cause_with_empty_summary_is_removed_without_counting_its_evidence():
     assert response.excluded_evidence_count == 0
 
 
-def test_whitespace_only_summary_is_kept_as_designed():
-    """DESIGN-015의 Cause.summary 제약은 '1자 이상'이며 공백 제거 규칙이 없다. 결정 전까지 현재 설계대로 둔다."""
-    result = AnalyzerResult(causes=[Cause(summary="   ", evidence=[Evidence(line=1, text="line one")])])
+def test_summary_with_surrounding_spaces_is_kept_as_given():
+    result = AnalyzerResult(causes=[Cause(summary="  합계 불일치 ", evidence=[Evidence(line=1, text="line one")])])
     response = verify_result(LOG, result)
-    assert response.causes == [Cause(summary="   ", evidence=[Evidence(line=1, text="line one")])]
+    assert response.causes == [Cause(summary="  합계 불일치 ", evidence=[Evidence(line=1, text="line one")])]

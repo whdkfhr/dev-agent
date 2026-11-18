@@ -307,11 +307,12 @@ def test_unexpected_error_location_without_traceback():
     assert _failure_location(None) == "unknown"
 
 
-def test_empty_summary_cause_is_not_in_success_response(failure_log):
+def test_blank_summary_cause_is_not_in_success_response(failure_log):
     line = line_number(failure_log, ASSERTION_LINE)
     result = AnalyzerResult(
         causes=[
             Cause(summary="", evidence=[Evidence(line=line, text=ASSERTION_LINE)]),
+            Cause(summary="   ", evidence=[Evidence(line=line, text=ASSERTION_LINE)]),
             Cause(summary="합계 불일치", evidence=[Evidence(line=line, text="assert 90 == 100")]),
         ],
         next_checks=["할인 계산 확인"],
@@ -322,14 +323,15 @@ def test_empty_summary_cause_is_not_in_success_response(failure_log):
     assert response.status_code == 200
     body = response.json()
     assert body["causes"] == [{"summary": "합계 불일치", "evidence": [{"line": line, "text": "assert 90 == 100"}]}]
-    assert all(cause["summary"] for cause in body["causes"])
+    assert all(cause["summary"].strip() for cause in body["causes"])
     assert body["excluded_evidence_count"] == 0
     assert analyzer.call_count == 1
 
 
-def test_only_empty_summary_cause_returns_empty_causes(failure_log):
+@pytest.mark.parametrize("summary", ["", "   ", "\t\n"])
+def test_only_blank_summary_cause_returns_empty_causes(failure_log, summary):
     line = line_number(failure_log, ASSERTION_LINE)
-    result = AnalyzerResult(causes=[Cause(summary="", evidence=[Evidence(line=line, text=ASSERTION_LINE)])])
+    result = AnalyzerResult(causes=[Cause(summary=summary, evidence=[Evidence(line=line, text=ASSERTION_LINE)])])
     analyzer = FakeAnalyzer(result=result)
     response = make_client(analyzer).post("/analyses", json={"log": failure_log})
 
