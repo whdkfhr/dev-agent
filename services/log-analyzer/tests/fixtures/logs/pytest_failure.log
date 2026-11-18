@@ -1,0 +1,20 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.16, pytest-9.2.0, pluggy-1.6.0
+rootdir: /work/shop
+collected 3 items
+
+tests/test_order.py .F.                                                  [100%]
+
+=================================== FAILURES ===================================
+_______________________________ test_total_price _______________________________
+
+    def test_total_price():
+        order = Order(items=[Item(price=50), Item(price=50)], discount=10)
+>       assert order.total() == 100
+E       AssertionError: assert 90 == 100
+E        +  where 90 = total()
+
+tests/test_order.py:12: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_order.py::test_total_price - AssertionError: assert 90 == 100
+========================= 1 failed, 2 passed in 0.05s ==========================
