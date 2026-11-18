@@ -13,6 +13,9 @@ class AnalysisRequest(BaseModel):
     @field_validator("log")
     @classmethod
     def log_must_not_be_blank(cls, value: str) -> str:
+        # 원문이 크기 제한을 넘으면 공백 검사를 하지 않는다. 크기 초과는 API 계층이 413으로 거절한다.
+        if len(value) > MAX_LOG_CHARS:
+            return value
         if not value.strip():
             raise ValueError("log must not be blank")
         return value

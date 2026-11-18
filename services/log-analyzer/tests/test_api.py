@@ -1,4 +1,7 @@
+import logging
+
 import pytest
+from fastapi.testclient import TestClient
 
 from log_analyzer.app import create_app
 from log_analyzer.config import TIMEOUT_ENV, Settings
@@ -250,3 +253,120 @@ def test_invalid_timeout_env_fails_app_creation(raw, monkeypatch):
 def test_timeout_env_is_applied(monkeypatch):
     monkeypatch.setenv(TIMEOUT_ENV, "2.5")
     assert Settings.from_env().timeout_seconds == 2.5
+
+
+# --- 리뷰 회귀 테스트 (dc7467a REJECTED) ---
+
+SYNTHETIC_SECRET = "SYNTHETIC-SECRET-7f3a9c"
+SYNTHETIC_PATH = "/srv/synthetic-internal/settings_secret.py"
+SYNTHETIC_LOG_LINE = "SYNTHETIC-LOG-LINE-41d2 token=SYNTHETIC-TOKEN-0b8e"
+
+
+class LeakyAnalyzer:
+    """메시지에 합성 secret, 내부 경로, 입력 로그 원문을 담은 예상하지 못한 예외를 낸다."""
+
+    async def analyze(self, log: str) -> AnalyzerResult:
+        raise RuntimeError(f"{SYNTHETIC_SECRET} at {SYNTHETIC_PATH}: {log}")
+
+
+def test_unexpected_error_does_not_leak_into_response_or_logs(caplog):
+    caplog.set_level(logging.DEBUG)
+    log = f"collected 1 item\n{SYNTHETIC_LOG_LINE}\nFAILED tests/test_x.py::test_y"
+    app = create_app(analyzer=LeakyAnalyzer(), settings=Settings(timeout_seconds=1.0))
+
+    # raise_server_exceptions=True: 예외가 앱 밖(서버)으로 나가면 여기서 다시 발생해 테스트가 실패한다.
+    # 서버는 앱 밖으로 나온 예외만 서버 로그에 남기므로, 이것으로 서버 로그 비노출을 확인한다.
+    response = TestClient(app, raise_server_exceptions=True).post("/analyses", json={"log": log})
+
+    assert_error(response, 500, "INTERNAL_ERROR", log=log)
+    forbidden = [SYNTHETIC_SECRET, SYNTHETIC_PATH, "synthetic-internal", SYNTHETIC_LOG_LINE, "SYNTHETIC-TOKEN", "Traceback"]
+    for value in forbidden:
+        assert value not in response.text
+
+    records = [record for record in caplog.records if record.name == "log_analyzer"]
+    assert len(records) == 1
+    record = records[0]
+    assert record.levelno == logging.ERROR
+    assert record.exc_info is None
+    assert record.exc_text is None
+    message = record.getMessage()
+    assert "code=INTERNAL_ERROR" in message
+    assert "exc_type=RuntimeError" in message
+    assert "location=log_analyzer.service:analyze:" in message
+    # caplog.text에는 pytest 형식기가 붙인 소스 파일 이름이 들어가므로, 경로 검사는 앱이 남긴 메시지로 한다.
+    for value in forbidden:
+        assert value not in caplog.text
+    assert all(r.exc_info is None for r in caplog.records)
+    assert ".py" not in message
+    assert "/" not in message
+
+
+def test_unexpected_error_location_without_traceback():
+    from log_analyzer.errors import _failure_location
+
+    assert _failure_location(None) == "unknown"
+
+
+def test_empty_summary_cause_is_not_in_success_response(failure_log):
+    line = line_number(failure_log, ASSERTION_LINE)
+    result = AnalyzerResult(
+        causes=[
+            Cause(summary="", evidence=[Evidence(line=line, text=ASSERTION_LINE)]),
+            Cause(summary="합계 불일치", evidence=[Evidence(line=line, text="assert 90 == 100")]),
+        ],
+        next_checks=["할인 계산 확인"],
+    )
+    analyzer = FakeAnalyzer(result=result)
+    response = make_client(analyzer).post("/analyses", json={"log": failure_log})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["causes"] == [{"summary": "합계 불일치", "evidence": [{"line": line, "text": "assert 90 == 100"}]}]
+    assert all(cause["summary"] for cause in body["causes"])
+    assert body["excluded_evidence_count"] == 0
+    assert analyzer.call_count == 1
+
+
+def test_only_empty_summary_cause_returns_empty_causes(failure_log):
+    line = line_number(failure_log, ASSERTION_LINE)
+    result = AnalyzerResult(causes=[Cause(summary="", evidence=[Evidence(line=line, text=ASSERTION_LINE)])])
+    analyzer = FakeAnalyzer(result=result)
+    response = make_client(analyzer).post("/analyses", json={"log": failure_log})
+
+    assert response.status_code == 200
+    assert response.json() == {"causes": [], "next_checks": [], "excluded_evidence_count": 0}
+    assert analyzer.call_count == 1
+
+
+@pytest.mark.parametrize(
+    "log",
+    [
+        pytest.param(" " * (MAX_LOG_CHARS + 1), id="spaces"),
+        pytest.param("\n" * (MAX_LOG_CHARS + 1), id="newlines"),
+        pytest.param(" \t\r\n" * (MAX_LOG_CHARS // 4 + 1), id="mixed-whitespace"),
+    ],
+)
+def test_blank_log_over_limit_returns_413_without_calling_analyzer(log):
+    assert len(log) > MAX_LOG_CHARS
+    analyzer = FakeAnalyzer()
+    response = make_client(analyzer).post("/analyses", json={"log": log})
+
+    assert_error(response, 413, "LOG_TOO_LARGE")
+    assert analyzer.call_count == 0
+
+
+@pytest.mark.parametrize(
+    "log",
+    [
+        pytest.param(" " * MAX_LOG_CHARS, id="spaces-at-limit"),
+        pytest.param("\n" * MAX_LOG_CHARS, id="newlines-at-limit"),
+    ],
+)
+def test_blank_log_within_limit_still_returns_422_without_calling_analyzer(log):
+    assert len(log) == MAX_LOG_CHARS
+    analyzer = FakeAnalyzer()
+    response = make_client(analyzer).post("/analyses", json={"log": log})
+
+    assert_error(response, 422, "INVALID_INPUT")
+    assert response.json()["error"]["message"] == "log가 비어 있습니다."
+    assert analyzer.call_count == 0

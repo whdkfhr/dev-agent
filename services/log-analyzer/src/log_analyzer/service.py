@@ -25,7 +25,11 @@ class AnalysisService:
 
 
 def verify_result(log: str, result: AnalyzerResult) -> AnalysisResponse:
-    """검증되지 않은 근거를 제외하고 그 수를 센다. 근거가 남지 않은 원인 후보는 뺀다."""
+    """검증되지 않은 근거를 제외하고 그 수를 센다.
+
+    근거가 남지 않은 원인 후보와 summary가 빈 문자열인 원인 후보는 뺀다(Cause.summary는 1자 이상).
+    summary 때문에 뺀 원인 후보의 근거는 검증된 것이므로 excluded_evidence_count에 세지 않는다.
+    """
     lines = split_lines(log)
     excluded = 0
     causes: list[Cause] = []
@@ -37,7 +41,7 @@ def verify_result(log: str, result: AnalyzerResult) -> AnalysisResponse:
                 verified.append(Evidence(line=item.line, text=check.value))
             else:
                 excluded += 1
-        if verified:
+        if verified and cause.summary:
             causes.append(Cause(summary=cause.summary, evidence=verified))
     next_checks = [item for item in result.next_checks if item.strip()]
     return AnalysisResponse(causes=causes, next_checks=next_checks, excluded_evidence_count=excluded)
