@@ -412,7 +412,13 @@ curl http://localhost:8080/tasks     # 다른 터미널에서 실행
 | `ANTHROPIC_API_KEY` | 필수 | Claude API key (AI 에이전트 실행용) |
 | `SERVER_URL` | 선택 | 워크플로가 실제로 연결할 수 있는 Spring 서버가 있을 때만 그 서버의 주소를 설정합니다. |
 
-`SERVER_URL`은 산출물 메타데이터를 Spring 서버에 등록하는 호출(`POST /tasks`, `/designs`, `/implementations`, `/reviews`, `/pull-requests`)에만 쓰입니다. 설정하지 않았거나 서버에 연결할 수 없으면 이 호출은 실패하고, 워크플로는 `WARN: Failed to register ... (non-blocking)` 경고를 남긴 뒤 다음 단계로 계속 진행합니다. 이 경우 서버에는 아무것도 저장되지 않으며, 산출물은 저장소의 문서, 브랜치, Pull Request로만 남습니다.
+`SERVER_URL`은 산출물 메타데이터를 Spring 서버에 등록하는 호출(`POST /tasks`, `/designs`, `/implementations`, `/reviews`, `/pull-requests`)에만 쓰입니다. 등록 호출이 실패하면 워크플로는 `WARN: Failed to register ... (non-blocking)` 경고를 남긴 뒤 다음 단계로 계속 진행합니다. 산출물의 기준은 저장소의 문서, 브랜치, Pull Request입니다.
+
+- `SERVER_URL`을 설정하지 않으면 요청을 보낼 서버가 없으므로 등록은 이루어지지 않습니다.
+- 연결 오류, 타임아웃, 응답 유실처럼 서버의 응답을 확인하지 못한 경우에는 서버가 요청을 처리했는지 워크플로만으로 단정할 수 없습니다. 경고가 남았더라도 서버에 등록되었을 수 있습니다.
+- 한 번의 실행에서 여러 등록 호출이 이어지면(예: Implementer의 `/implementations`와 `/pull-requests`) 일부만 성공할 수 있습니다.
+
+따라서 서버의 등록 상태가 저장소의 산출물과 일치한다고 가정하지 말고, 필요하면 서버의 조회 API로 직접 확인합니다.
 
 ---
 
