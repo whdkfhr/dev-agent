@@ -25,10 +25,10 @@ Implementer     구현 산출물 기록 → 소스 코드 + 테스트 → POST /
 Pull Request   검증된 변경분을 PR로 추적 → POST /pull-requests
 ```
 
-각 단계는 GitHub Actions와 문서 산출물을 중심으로 연결되며, 산출물 메타데이터는 Spring Boot 서버의 인메모리 저장소에 기록됩니다. Railway 배포 환경에서는 API 흐름과 상태 전이를 확인할 수 있습니다.
+각 단계는 GitHub Actions와 저장소의 문서 산출물(`docs/tasks/`, `docs/design/` 등)을 중심으로 연결됩니다. 위 그림의 `POST` 호출은 연결 가능한 Spring 서버가 `SERVER_URL`로 설정된 경우에만 산출물 메타데이터를 서버의 인메모리 저장소에 등록하며, 등록에 실패해도 워크플로는 경고만 남기고 계속됩니다([GitHub Actions 설정](#github-actions-설정)). 현재 운영 중인 서버는 없으므로, API 흐름과 상태 전이는 로컬에서 Spring 서비스를 실행해 확인합니다([Deployment](#deployment)).
 
 AgentRun 도메인은 하나의 Issue 처리 과정을 `PLANNING → DESIGNING → IMPLEMENTING → TESTING → REVIEWING → PR_READY` 상태로 추적합니다.
-각 step은 입력, 출력, 사용 tool, 성공/실패, 재시도 여부를 로그로 저장해 LLM 기반 자동화 흐름의 추적 가능성과 디버깅 가능성을 높입니다.
+각 step의 입력, 출력, 사용 tool, 성공/실패, 재시도 여부를 API로 기록할 수 있게 해 LLM 기반 자동화 흐름의 추적 가능성과 디버깅 가능성을 높입니다. 현재 GitHub Actions 워크플로는 AgentRun API를 호출하지 않습니다.
 
 ---
 
@@ -200,7 +200,7 @@ uv run pytest                              # 자동화 테스트
 
 ### 현재 제한 사항
 
-- 로컬 개발 전용입니다. **배포, 인증, Spring 서비스와의 연동은 범위 밖**이며, Railway 배포에도 포함되지 않습니다.
+- 로컬 개발 전용입니다. **배포, 인증, Spring 서비스와의 연동은 범위 밖**입니다.
 - 분석 결과는 가짜 분석기의 키워드 매칭이며 실제 원인 분석이 아닙니다.
 - 요청과 결과를 저장하지 않습니다.
 - 외부에 배포하려면 요청 본문 전체 크기 제한, 인증, 개발용 문서 경로(`/docs`, `/redoc`, `/openapi.json`)의 공개 여부, 접근 로그 정책을 먼저 검토해야 합니다.
@@ -216,7 +216,7 @@ uv run pytest                              # 자동화 테스트
 | Build | Gradle |
 | AI | Claude API |
 | CI/CD | GitHub Actions |
-| 배포 | Railway |
+| 배포 | 현재 운영 배포 없음 (과거 Railway 배포 이력은 [Deployment](#deployment) 참조) |
 | 저장소 | ConcurrentHashMap (인메모리) |
 | 로그 분석 서비스 | Python 3.12, FastAPI, Pydantic v2, uv, pytest ([Log Analyzer](#log-analyzer-pythonfastapi)) |
 
@@ -224,7 +224,7 @@ uv run pytest                              # 자동화 테스트
 
 ## API Endpoints
 
-Spring 서비스(Railway 배포)의 API입니다. 로그 분석 서비스의 `POST /analyses`는 배포되지 않으며 [Log Analyzer](#log-analyzer-pythonfastapi) 절에 정리했습니다.
+Spring 서비스의 API입니다. 현재 운영 배포가 없으므로 로컬에서 실행해 호출합니다([Deployment](#deployment)). 로그 분석 서비스의 `POST /analyses`는 [Log Analyzer](#log-analyzer-pythonfastapi) 절에 정리했습니다.
 
 | Method | Endpoint | 설명 |
 |--------|----------|------|
@@ -388,34 +388,43 @@ dev-agent/
 
 ## Deployment
 
-Railway에는 Spring 서비스만 배포되어 있습니다. 로그 분석 서비스는 배포하지 않습니다.
+현재 운영 중인 배포는 없습니다.
 
-```
-https://dev-agent-production-1459.up.railway.app
-```
+Phase 6에서 Spring 서비스를 Railway에 배포해 API 흐름을 확인한 적이 있으나, 비용이 발생하기 전에 Railway 프로젝트를 종료했습니다. 당시 사용한 Railway 주소는 더 이상 접근할 수 없습니다. 로그 분석 서비스는 처음부터 배포 대상이 아니었습니다.
 
-### 동작 확인
+### 로컬 실행과 동작 확인
 
 ```bash
-curl https://dev-agent-production-1459.up.railway.app/tasks
+./gradlew bootRun                    # http://localhost:8080
+curl http://localhost:8080/tasks     # 다른 터미널에서 실행
 ```
+
+데이터는 인메모리에만 있으므로 서버를 재시작하면 사라집니다.
 
 ---
 
 ## GitHub Actions 설정
 
-워크플로우 실행에 필요한 GitHub Secrets:
+워크플로우 실행에 쓰는 GitHub Secrets:
 
-| Secret | 설명 |
-|--------|------|
-| `ANTHROPIC_API_KEY` | Claude API key (AI 에이전트 실행용) |
-| `SERVER_URL` | `https://dev-agent-production-1459.up.railway.app` |
+| Secret | 필수 여부 | 설명 |
+|--------|-----------|------|
+| `ANTHROPIC_API_KEY` | 필수 | Claude API key (AI 에이전트 실행용) |
+| `SERVER_URL` | 선택 | 워크플로가 실제로 연결할 수 있는 Spring 서버가 있을 때만 그 서버의 주소를 설정합니다. |
+
+`SERVER_URL`은 산출물 메타데이터를 Spring 서버에 등록하는 호출(`POST /tasks`, `/designs`, `/implementations`, `/reviews`, `/pull-requests`)에만 쓰입니다. 등록 호출이 실패하면 워크플로는 `WARN: Failed to register ... (non-blocking)` 경고를 남긴 뒤 다음 단계로 계속 진행합니다. 산출물의 기준은 저장소의 문서, 브랜치, Pull Request입니다.
+
+- `SERVER_URL`을 설정하지 않으면 요청을 보낼 서버가 없으므로 등록은 이루어지지 않습니다.
+- 연결 오류, 타임아웃, 응답 유실처럼 서버의 응답을 확인하지 못한 경우에는 서버가 요청을 처리했는지 워크플로만으로 단정할 수 없습니다. 경고가 남았더라도 서버에 등록되었을 수 있습니다.
+- 한 번의 실행에서 여러 등록 호출이 이어지면(예: Implementer의 `/implementations`와 `/pull-requests`) 일부만 성공할 수 있습니다.
+
+따라서 서버의 등록 상태가 저장소의 산출물과 일치한다고 가정하지 말고, 필요하면 서버의 조회 API로 직접 확인합니다.
 
 ---
 
 ## 다른 프로젝트에 적용하기
 
-dev-agent는 오케스트레이션 서버로, 다른 프로젝트의 GitHub Issue → PR 검증 흐름 실험에 활용할 수 있습니다.
+dev-agent의 워크플로와 에이전트 프롬프트는 다른 프로젝트의 GitHub Issue → PR 검증 흐름 실험에 활용할 수 있습니다. 산출물을 서버에서 조회하려면 Spring 서비스를 직접 실행하고, 워크플로가 연결할 수 있는 주소를 `SERVER_URL`로 설정해야 합니다.
 
 ### 적용 방법 (워크플로우 복사)
 
@@ -432,7 +441,7 @@ dev-agent는 오케스트레이션 서버로, 다른 프로젝트의 GitHub Issu
 2. 타겟 프로젝트 GitHub Secrets 추가
 ```
 ANTHROPIC_API_KEY=<Claude API key>
-SERVER_URL=https://dev-agent-production-1459.up.railway.app
+SERVER_URL=<연결 가능한 Spring 서버 주소>   # 선택. 없으면 서버 등록 호출은 경고 후 건너뜀
 ```
 
 3. GitHub Issue 생성 → 라벨 기반 파이프라인 실행과 Gate 결과 확인
@@ -448,7 +457,7 @@ SERVER_URL=https://dev-agent-production-1459.up.railway.app
 | Phase 3 | Architect Agent — Design 관리 API | ✅ 완료 |
 | Phase 4 | Implementer Agent — Implementation 관리 API | ✅ 완료 |
 | Phase 5 | Reviewer Agent — Review 관리 API | ✅ 완료 |
-| Phase 6 | Pull Request 관리 API + Railway 배포 | ✅ 완료 |
+| Phase 6 | Pull Request 관리 API + Railway 배포 (이후 비용 발생 전 종료) | ✅ 완료 |
 | Phase 7 | AgentRun 상태 추적 + Tool Registry + step log | ✅ 완료 |
 | Phase 8 | Spring AI ToolCallback 기반 실제 Tool Calling 연동 | 예정 |
 | Phase 9 | 테스트 로그 분석 서비스 1단계 — 가짜 분석기로 API와 테스트 완성 | ✅ 완료 |
