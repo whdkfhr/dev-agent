@@ -17,14 +17,25 @@ AgentRunController            (변경 없음: 요청을 서비스에 위임)
      |
      v
 AgentRunService
-     |-- 1. 요청 필수 값 검증 ----------- 실패: InvalidAgentRunRequestException (400)
-     |-- 2. tool 등록 확인 (step log만) --- 실패: ToolNotFoundException (404, 기존)
-     |-- 3. runId 단위 원자적 갱신
-     |        생성      : 없을 때만 넣기 ------ 이미 있음: AgentRunAlreadyExistsException (409, 기존)
-     |        상태 전이 : 있을 때만 갱신 ------ 없음: AgentRunNotFoundException (404, 기존)
-     |                    갱신 안에서 현재 상태 기준 전이 검사 -- 실패: InvalidAgentRunStatusTransitionException (400, 기존)
-     |        step 추가 : 있을 때만 갱신 ------ 없음: AgentRunNotFoundException (404, 기존)
-     |                    갱신 안에서 현재 값에 로그 1건 추가
+     |
+     |  생성
+     |    1. 입력 검증 (runId, issueId) ------------- 실패: InvalidAgentRunRequestException (400)
+     |    2. 원자적 "없을 때만 넣기" ---------------- 이미 있음: AgentRunAlreadyExistsException (409, 기존)
+     |
+     |  상태 전이 (기존 우선순위 유지)
+     |    1. run 존재 사전 확인 --------------------- 없음: AgentRunNotFoundException (404, 기존)
+     |    2. nextStatus null 확인 ------------------- null: InvalidAgentRunStatusTransitionException (400, 기존)
+     |    3. 원자적 "있을 때만 갱신"
+     |         갱신 시점 run 부재 ------------------- AgentRunNotFoundException (404)
+     |         갱신 안에서 현재 상태 기준 전이 검사 -- 실패: InvalidAgentRunStatusTransitionException (400, 기존)
+     |
+     |  step 추가
+     |    1. 입력 검증 (stepName, toolName, status) -- 실패: InvalidAgentRunRequestException (400)
+     |    2. run 존재 사전 확인 --------------------- 없음: AgentRunNotFoundException (404, 기존 우선순위)
+     |    3. tool 등록 확인 ------------------------- 없음: ToolNotFoundException (404, 기존)
+     |    4. 원자적 "있을 때만 갱신"
+     |         갱신 시점 run 부재 ------------------- AgentRunNotFoundException (404)
+     |         갱신 안에서 현재 값에 로그 1건 추가
      v
 ConcurrentHashMap<String, AgentRun>   (인메모리, 변경 없음)
 
@@ -83,10 +94,13 @@ Request:
 
 Response 200: AgentRunResponse (DESIGN-007과 같음)
 
-Error:
+Error (검사 순서대로, 기존 우선순위와 같음):
+- 404 `AGENT_RUN_NOT_FOUND`: `runId`가 없음. `nextStatus`가 없거나 `null`이거나 건너뛰는 전이여도 run이 없으면 404가 먼저다. (기존 우선순위 유지. 2026-11-22 develop `ff28b04`에서 존재하지 않는 run에 `nextStatus` 없음, `null`, `TESTING`을 보내면 모두 404임을 확인)
 - 400 `INVALID_AGENT_RUN_STATUS_TRANSITION`: `nextStatus`가 없거나 `null`(기존), 또는 갱신 시점의 현재 상태에서 `nextStatus`로 갈 수 없음. 같은 `nextStatus`로 동시에 여러 요청이 오면 정확히 한 요청만 200을 받고, 나머지는 먼저 성공한 전이 뒤의 상태를 기준으로 검사되어 이 400을 받는다. (기존 코드 유지, 409를 새로 쓰지 않는다)
-- 404 `AGENT_RUN_NOT_FOUND`: `runId`가 없음 (기존)
-- 500 `INTERNAL_ERROR`: `nextStatus`에 빈 문자열이나 정의되지 않은 값 등 요청 본문 변환 실패 (기존 동작, 이번 범위 밖)
+- 404 `AGENT_RUN_NOT_FOUND`: 사전 확인 뒤 갱신 시점에 run이 없음. 현재는 삭제 API가 없어 일어나지 않지만, 갱신 결과가 비어 있으면 404로 처리한다.
+- 500 `INTERNAL_ERROR`: `nextStatus`에 빈 문자열이나 정의되지 않은 값 등 요청 본문 변환 실패. 서비스에 도달하기 전에 실패하므로 run 존재와 상관없이 500이다. (기존 동작, 이번 범위 밖)
+
+상태 전이에는 새 입력 검증을 추가하지 않는다. 우선순위는 기존과 같이 "run 존재 → nextStatus null → 전이 가능 여부"이다.
 
 ### POST /agent-runs/{runId}/steps
 
@@ -106,13 +120,18 @@ Response 201: AgentRunResponse (DESIGN-007과 같음). 응답의 `stepLogs`는 �
 
 Error (검사 순서대로):
 - 400 `INVALID_AGENT_RUN_REQUEST`: `stepName` 또는 `toolName`이 빈 값이거나, `status`가 없거나 `null`. 저장하지 않는다. (변경: 기존에는 `stepName`·`status` 누락이 201, `toolName` 누락·공백이 404)
-- 404 `TOOL_NOT_FOUND`: `toolName`이 빈 값이 아니지만 Tool Registry에 없음 (기존 유지)
-- 404 `AGENT_RUN_NOT_FOUND`: `runId`가 없음 (기존)
-- 500 `INTERNAL_ERROR`: `status`에 빈 문자열·공백·정의되지 않은 값, `retry`에 불리언이 아닌 값 등 요청 본문 변환 실패. 저장되지 않는다. (기존 동작, 이번 범위 밖)
+- 404 `AGENT_RUN_NOT_FOUND`: `runId`가 없음. tool이 등록되지 않았어도 run이 없으면 이 404가 먼저다. (기존 우선순위 유지)
+- 404 `TOOL_NOT_FOUND`: run은 있고 `toolName`이 빈 값이 아니지만 Tool Registry에 없음 (기존 유지)
+- 404 `AGENT_RUN_NOT_FOUND`: 사전 확인 뒤 갱신 시점에 run이 없음. 현재는 삭제 API가 없어 일어나지 않지만, 갱신 결과가 비어 있으면 404로 처리한다.
+- 500 `INTERNAL_ERROR`: `status`에 빈 문자열·공백·정의되지 않은 값, `retry`에 불리언이 아닌 값 등 요청 본문 변환 실패. 서비스에 도달하기 전에 실패하므로 run 존재와 상관없이 500이며 저장되지 않는다. (기존 동작, 이번 범위 밖)
 
 동시에 들어온 유효한 step log 요청은 각각 201을 받고, 각 요청의 로그는 정확히 한 번씩 저장된다. 상태 전이와 겹쳐도 로그와 전이 결과가 모두 남는다.
 
-검사 순서(입력 → tool → run)는 기존 코드의 순서(run → tool)와 다르다. 입력이 잘못되었으면 run이나 tool이 있는지와 상관없이 400을 먼저 반환한다. 존재하지 않는 run에 등록되지 않은 tool로 요청하면 기존에는 `AGENT_RUN_NOT_FOUND`였고 이후에는 `TOOL_NOT_FOUND`가 된다. tool 확인을 원자적 갱신 밖에서 먼저 하기 위한 변경이며(Key Design Decisions 참조), 두 경우 모두 404라 상태 코드는 같다.
+검사 순서는 "입력 → run 존재 → tool → 원자적 갱신"이다. 기존 순서 "run → tool"은 그대로 유지되고, 그 앞에 새 입력 검증만 추가된다. 존재하지 않는 run에 등록되지 않은 tool로 요청하면 기존과 같이 `AGENT_RUN_NOT_FOUND`이다.
+
+새 입력 검증이 run 확인보다 앞에 오므로, 존재하지 않는 run에 필수 값이 빠진 요청은 기존 404(2026-11-22 develop `ff28b04`에서 `toolName` 없음, `status` 없음 모두 404 확인) 대신 400을 받는다. 이 조합은 기존에 입력 검증이 없어서 404가 나던 경우이며, 입력 오류를 먼저 알려 준다는 TASK-021의 요구에 따른 의도된 변경이다.
+
+run 존재 사전 확인은 오류 우선순위를 위한 것이고, 원자성은 4단계의 갱신이 보장한다. 사전 확인과 갱신 사이에 run이 사라지는 경우도 갱신 결과로 다시 판단해 404로 처리한다.
 
 ## Data Model
 
@@ -203,10 +222,11 @@ src/test/java/com/arok2/dev_agent/agentrun/
 ```
 
 ## Key Design Decisions
-- runId 단위 원자성은 저장소 맵(ConcurrentHashMap)의 키 단위 원자적 연산으로 얻는다. 생성은 "없을 때만 넣기", 상태 전이와 step 추가는 "있을 때만 현재 값으로부터 새 값 계산"을 쓴다. 이유: 같은 키에 대한 갱신이 맵 안에서 직렬화되고, 별도 락 객체의 생성·정리가 필요 없으며, 다른 runId 요청은 서로 막지 않는다.
+- runId 단위 원자성은 저장소 맵(ConcurrentHashMap)의 키 단위 원자적 연산으로 얻는다. 생성은 "없을 때만 넣기", 상태 전이와 step 추가는 "있을 때만 현재 값으로부터 새 값 계산"을 쓴다. 이유: 같은 키에 대한 갱신이 맵 안에서 원자적으로 처리되고, 별도 락 객체의 생성·정리가 필요 없다. 다른 runId의 요청은 일반적으로 서로 기다리지 않지만, 맵의 같은 해시 구간에 속하면 갱신이 짧게 대기할 수 있다. 이 대기는 성능에만 영향을 주며 결과의 정확성에는 영향을 주지 않는다.
 - 상태 전이 검사는 원자적 갱신 안에서 그 시점의 현재 상태를 기준으로 한다. 이유: 갱신 밖에서 검사하면 검사와 저장 사이에 다른 갱신이 끼어 상태가 되돌아가거나 같은 전이가 두 번 성공한다. 갱신 안에서 예외를 던지면 맵은 기존 값을 유지한다.
 - 원자적 갱신 함수 안에서는 현재 값으로 새 record를 만드는 일만 한다. Tool Registry 조회, 입력 검증, 다른 키 접근, 대기, 외부 호출은 하지 않는다. 이유: 이 연산은 키가 속한 구간을 잠근 채 실행되므로, 함수가 길거나 다른 갱신을 기다리면 처리량이 떨어지거나 교착할 수 있다.
-- 입력 검증과 tool 등록 확인은 원자적 갱신 전에 서비스 계층에서 한다. 이유: 비즈니스 규칙은 서비스에서 검증한다는 기존 원칙(TASK-007 Non-Functional)을 따르고, 서비스 단위 테스트로 검증할 수 있다. Tool Registry는 기동 후 바뀌지 않으므로 갱신 밖에서 확인해도 결과가 같다.
+- 입력 검증, run 존재 사전 확인, tool 등록 확인은 원자적 갱신 전에 서비스 계층에서 한다. 이유: 비즈니스 규칙은 서비스에서 검증한다는 기존 원칙(TASK-007 Non-Functional)을 따르고, 서비스 단위 테스트로 검증할 수 있다. Tool Registry는 기동 후 바뀌지 않으므로 갱신 밖에서 확인해도 결과가 같다.
+- 오류 우선순위는 기존 API의 순서를 유지한다. 상태 전이는 "run 존재 → nextStatus null → 전이 가능 여부", step 추가는 기존 "run → tool" 앞에 새 입력 검증만 둔다. 이유: 불필요한 오류 코드 변경을 피한다. run 존재는 사전 확인으로 우선순위를 맞추고, 갱신 시점의 부재도 갱신 결과로 다시 처리해 원자성과 우선순위를 분리한다.
 - Bean Validation(spring-boot-starter-validation)은 이번에 도입하지 않는다. 이유: TASK-021 Non-Functional이 운영 의존성 추가를 금지한다. 프로젝트의 다른 API도 Bean Validation을 쓰지 않는다.
 - 입력 오류는 새 예외 하나와 새 오류 코드 `INVALID_AGENT_RUN_REQUEST`(400)로 표현하고, GlobalExceptionHandler에는 이 예외의 매핑 하나만 추가한다. 이유: 기존 `Exception` catch-all과 다른 API의 처리를 건드리지 않아, 앱 전체의 본문 변환 실패 처리(범위 밖)와 겹치지 않는다.
 - 같은 전이의 동시 요청에서 진 요청은 기존 `INVALID_AGENT_RUN_STATUS_TRANSITION`(400)을 받는다. 이유: 갱신 안에서 현재 상태를 다시 검사하면 진 요청은 "DESIGNING → DESIGNING" 같은 잘못된 전이가 되어 기존 계약에 그대로 해당한다. 새 409 코드를 만들지 않는다.
@@ -220,7 +240,7 @@ src/test/java/com/arok2/dev_agent/agentrun/
 
 | Option | Pros | Cons | Selected |
 |--------|------|------|----------|
-| A. 맵의 키 단위 원자적 연산 (없을 때만 넣기, 있을 때만 계산해 갱신) | 새 객체·락 관리 없음. 같은 runId만 직렬화되고 다른 runId는 병렬. 갱신 중 예외 시 기존 값 유지. 기존 불변 record와 맞음 | 갱신 함수 안에서 오래 걸리는 일이나 다른 키 갱신을 하면 안 된다는 제약을 지켜야 함. 같은 해시 구간의 다른 키가 잠깐 막힐 수 있음 | ✅ |
+| A. 맵의 키 단위 원자적 연산 (없을 때만 넣기, 있을 때만 계산해 갱신) | 새 객체·락 관리 없음. 같은 runId의 갱신은 원자적. 다른 runId는 대체로 서로 기다리지 않음. 갱신 중 예외 시 기존 값 유지. 기존 불변 record와 맞음 | 갱신 함수 안에서 오래 걸리는 일이나 다른 키 갱신을 하면 안 된다는 제약을 지켜야 함. 다른 runId라도 같은 해시 구간이면 갱신이 짧게 대기할 수 있음 | ✅ |
 | B. runId별 락 객체(별도 맵에 보관) | 임계 구역 안에서 자유롭게 여러 단계를 처리 | 락 객체 생성·정리 관리 필요. 락 맵과 데이터 맵 두 개를 일관되게 유지해야 함. 코드가 늘어남 | |
 | C. 서비스 메서드 전체 동기화 | 가장 단순 | 모든 runId 요청이 하나씩 처리됨. 조회까지 막을지 별도로 정해야 함 | |
 | D. 낙관적 갱신(이전 값과 같을 때만 교체, 실패 시 재시도) | 락 없음 | 재시도 반복 처리와 재시도 한도 설계가 필요하고, 경합이 많으면 반복이 늘어남 | |
@@ -240,7 +260,7 @@ src/test/java/com/arok2/dev_agent/agentrun/
 선택 이유: C는 운영 코드에 테스트 경로를 만들지 않고, A의 교착 위험과 B의 무의미한 복잡도를 피한다. 수정 후 원자적 구현에서는 불변식이 항상 성립하므로 회귀 테스트로 안정적이다. C의 한계(수정 전 실패의 확률성)는 수정 전 비교 실행에서 시도·실패 횟수를 기록하는 방식으로 드러낸다. D는 이번에는 채택하지 않으며, C로 결함을 놓친 사례가 생기면 별도 작업으로 검토한다.
 
 ## Non-Functional Design
-- 성능: 같은 runId 요청만 직렬화되고 다른 runId는 병렬로 처리된다. step 추가는 기존 로그를 복사하므로 실행당 로그 수 n에 대해 추가 1건이 O(n)이다. 실행당 step이 수십 건 수준인 현재 용도에서는 허용한다. 수천 건 이상이 필요해지면 저장 구조를 다시 설계한다.
+- 성능: 같은 runId에 대한 갱신은 원자적으로 하나씩 반영된다. 다른 runId의 갱신은 일반적으로 서로 기다리지 않지만, 맵의 같은 해시 구간에 속하면 짧게 대기할 수 있어 항상 병렬로 처리된다고 보장하지 않는다. 이 대기는 결과의 정확성에 영향을 주지 않으며, 갱신 함수를 짧게 유지해 대기 시간을 줄인다. 조회는 갱신을 기다리지 않는다. step 추가는 기존 로그를 복사하므로 실행당 로그 수 n에 대해 추가 1건이 O(n)이다. 실행당 step이 수십 건 수준인 현재 용도에서는 허용한다. 수천 건 이상이 필요해지면 저장 구조를 다시 설계한다.
 - 동시성: 단일 인스턴스 안에서 같은 runId에 대한 생성·전이·step 추가가 원자적이다. 다중 인스턴스는 범위 밖이며, 인메모리 저장소라 인스턴스 간에는 데이터를 공유하지 않는다.
 - 보안: 입력 오류 메시지에는 필드 이름과 사유만 넣고 요청 값은 넣지 않는다. 인증은 기존과 같이 없다.
 - 확장성: 영속 저장소로 바꿀 때는 저장소 계층의 원자적 연산(DB 제약, 낙관적 잠금 등)으로 같은 보장을 다시 설계해야 한다. 이 설계의 보장은 인메모리 맵에 한정된다.
@@ -256,12 +276,13 @@ src/test/java/com/arok2/dev_agent/agentrun/
 ### 2. 입력 검증 (AgentRunService)
 1. 생성: `runId`, `issueId`가 null이거나 공백 제거 후 비어 있으면 예외. `issueTitle`은 검사하지 않는다.
 2. step 추가: `stepName`, `toolName`이 null이거나 공백 제거 후 비어 있으면 예외. `status`가 null이면 예외.
-3. 검증은 원자적 갱신과 tool 확인보다 먼저 한다. 저장 값은 요청 값을 그대로 쓴다(공백을 잘라 저장하지 않는다).
+3. 검증은 run 존재 확인, tool 확인, 원자적 갱신보다 먼저 한다. 저장 값은 요청 값을 그대로 쓴다(공백을 잘라 저장하지 않는다).
+4. 상태 전이에는 새 입력 검증을 추가하지 않는다.
 
 ### 3. 원자적 갱신 (AgentRunService)
 1. 생성: 새 AgentRun을 만든 뒤 "없을 때만 넣기"로 저장한다. 기존 값이 돌아오면 `AgentRunAlreadyExistsException`. 먼저 존재 여부를 확인하는 코드는 지운다.
-2. 상태 전이: `nextStatus`가 null이면 기존처럼 `InvalidAgentRunStatusTransitionException`. 그다음 "있을 때만 갱신"으로, 갱신 함수 안에서 현재 값의 상태로 `canTransitionTo`를 검사하고, 실패하면 같은 예외를 던지고, 성공하면 상태와 `updatedAt`만 바꾼 새 AgentRun을 돌려준다. 결과가 없으면(키 없음) `AgentRunNotFoundException`.
-3. step 추가: 입력 검증 → Tool Registry 확인 → AgentStepLog 생성 → "있을 때만 갱신"으로, 갱신 함수 안에서 현재 값의 로그 리스트를 복사해 1건을 추가한 불변 리스트와 `updatedAt`으로 새 AgentRun을 돌려준다. 결과가 없으면 `AgentRunNotFoundException`.
+2. 상태 전이: 먼저 run 존재를 확인해 없으면 `AgentRunNotFoundException`(기존 우선순위). 그다음 `nextStatus`가 null이면 기존처럼 `InvalidAgentRunStatusTransitionException`. 그다음 "있을 때만 갱신"으로, 갱신 함수 안에서 현재 값의 상태로 `canTransitionTo`를 검사하고, 실패하면 같은 예외를 던지고, 성공하면 상태와 `updatedAt`만 바꾼 새 AgentRun을 돌려준다. 결과가 없으면(키 없음) `AgentRunNotFoundException`.
+3. step 추가: 입력 검증 → run 존재 확인(없으면 `AgentRunNotFoundException`) → Tool Registry 확인 → AgentStepLog 생성 → "있을 때만 갱신"으로, 갱신 함수 안에서 현재 값의 로그 리스트를 복사해 1건을 추가한 불변 리스트와 `updatedAt`으로 새 AgentRun을 돌려준다. 결과가 없으면 `AgentRunNotFoundException`.
 4. 응답은 원자적 연산이 돌려준 값으로 만든다. 갱신 후 저장소를 다시 조회하지 않는다.
 5. 갱신 함수 안에서는 Tool Registry 조회, 로그 출력을 포함한 I/O, 다른 runId 접근, 대기를 하지 않는다.
 
@@ -270,6 +291,24 @@ src/test/java/com/arok2/dev_agent/agentrun/
 2. 컨트롤러 테스트(MockMvc): 위 필드에 대해 필드 없음, `null`, `""`, `"   "` 요청이 400과 `INVALID_AGENT_RUN_REQUEST`를 반환하고, 이후 조회 결과가 바뀌지 않았는지 확인한다. `status`는 필드 없음과 `null`만 400을 검증한다.
 3. 유지 확인: `issueTitle` 없는 생성 201, 등록되지 않은 tool 404 `TOOL_NOT_FOUND`.
 4. 범위 밖 확인: `status`에 `""`와 `"DONE"`을 보낸 뒤 step log 수가 바뀌지 않았는지만 확인한다. 응답 코드는 검증하지 않는다.
+
+### 4-1. 오류 우선순위 테스트
+서비스 테스트와 컨트롤러 테스트(MockMvc) 양쪽에서 확인한다. 컨트롤러 테스트는 상태 코드와 `code`를 함께 검증한다.
+
+| 대상 | 요청 조건 | 기대 결과 | 근거 |
+|------|-----------|-----------|------|
+| 상태 전이 | 없는 run + `nextStatus` 없음 | 404 `AGENT_RUN_NOT_FOUND` | 기존 우선순위 유지 |
+| 상태 전이 | 없는 run + `nextStatus: null` | 404 `AGENT_RUN_NOT_FOUND` | 기존 우선순위 유지 |
+| 상태 전이 | 없는 run + 건너뛰는 전이 | 404 `AGENT_RUN_NOT_FOUND` | 기존 우선순위 유지 |
+| 상태 전이 | 있는 run + `nextStatus` 없음 | 400 `INVALID_AGENT_RUN_STATUS_TRANSITION` | 기존 테스트 유지 |
+| step 추가 | 없는 run + 등록되지 않은 tool(나머지 유효) | 404 `AGENT_RUN_NOT_FOUND` | 기존 우선순위 유지 |
+| step 추가 | 있는 run + 등록되지 않은 tool | 404 `TOOL_NOT_FOUND` | 기존 유지 |
+| step 추가 | 없는 run + `toolName` 없음 | 400 `INVALID_AGENT_RUN_REQUEST` | 의도된 변경(입력 검증 우선) |
+| step 추가 | 없는 run + `status` 없음 | 400 `INVALID_AGENT_RUN_REQUEST` | 의도된 변경(입력 검증 우선) |
+| step 추가 | 있는 run + `stepName` 공백 + 등록되지 않은 tool | 400 `INVALID_AGENT_RUN_REQUEST` | 입력 검증이 tool 확인보다 먼저 |
+| 생성 | 이미 있는 runId + `issueId` 공백 | 400 `INVALID_AGENT_RUN_REQUEST`, 기존 실행 값 변경 없음 | 입력 검증이 중복 확인보다 먼저 |
+
+갱신 시점의 run 부재(사전 확인 뒤 사라지는 경우)는 삭제 API가 없어 공개 API로 재현할 수 없다. 이 경로는 코드 리뷰에서 "갱신 결과가 비어 있으면 404"로 처리하는지 확인하고, 테스트로 강제하기 위한 주입 지점은 두지 않는다.
 
 ### 5. 동시성 회귀 테스트 (AgentRunServiceConcurrencyTest)
 공통 규칙
