@@ -93,4 +93,4 @@ TASK-007로 추가된 AgentRun API는 실행 생성, 상태 전이, step log 추
 - Issue 제목 없는 생성의 201, 등록되지 않은 tool의 404 유지 확인
 
 ## Status
-TODO
+IN_PROGRESS
