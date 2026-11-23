@@ -9,6 +9,7 @@ import com.arok2.dev_agent.agentrun.dto.AgentStepLogCreateRequest;
 import com.arok2.dev_agent.agentrun.dto.AgentStepLogResponse;
 import com.arok2.dev_agent.common.exception.AgentRunAlreadyExistsException;
 import com.arok2.dev_agent.common.exception.AgentRunNotFoundException;
+import com.arok2.dev_agent.common.exception.InvalidAgentRunRequestException;
 import com.arok2.dev_agent.common.exception.InvalidAgentRunStatusTransitionException;
 import org.springframework.stereotype.Service;
 
@@ -29,9 +30,8 @@ public class AgentRunService {
     }
 
     public AgentRunResponse createAgentRun(AgentRunCreateRequest request) {
-        if (agentRunStore.containsKey(request.runId())) {
-            throw new AgentRunAlreadyExistsException(request.runId());
-        }
+        requireNotBlank(request.runId(), "runId");
+        requireNotBlank(request.issueId(), "issueId");
 
         Instant now = Instant.now();
         AgentRun agentRun = new AgentRun(
@@ -43,7 +43,11 @@ public class AgentRunService {
                 now,
                 now
         );
-        agentRunStore.put(agentRun.runId(), agentRun);
+
+        AgentRun existing = agentRunStore.putIfAbsent(agentRun.runId(), agentRun);
+        if (existing != null) {
+            throw new AgentRunAlreadyExistsException(request.runId());
+        }
 
         return toResponse(agentRun);
     }
@@ -63,30 +67,39 @@ public class AgentRunService {
         if (nextStatus == null) {
             throw new InvalidAgentRunStatusTransitionException(agentRun.status().name(), "null");
         }
-        if (!agentRun.status().canTransitionTo(nextStatus)) {
-            throw new InvalidAgentRunStatusTransitionException(agentRun.status().name(), nextStatus.name());
-        }
 
-        AgentRun updated = new AgentRun(
-                agentRun.runId(),
-                agentRun.issueId(),
-                agentRun.issueTitle(),
-                nextStatus,
-                agentRun.stepLogs(),
-                agentRun.createdAt(),
-                Instant.now()
-        );
-        agentRunStore.put(updated.runId(), updated);
+        // 전이 검사는 갱신 시점의 현재 값으로 한다. 예외가 나면 맵은 기존 값을 유지한다.
+        AgentRun updated = agentRunStore.computeIfPresent(runId, (key, current) -> {
+            if (!current.status().canTransitionTo(nextStatus)) {
+                throw new InvalidAgentRunStatusTransitionException(current.status().name(), nextStatus.name());
+            }
+            return new AgentRun(
+                    current.runId(),
+                    current.issueId(),
+                    current.issueTitle(),
+                    nextStatus,
+                    current.stepLogs(),
+                    current.createdAt(),
+                    Instant.now()
+            );
+        });
+        if (updated == null) {
+            throw new AgentRunNotFoundException(runId);
+        }
 
         return toResponse(updated);
     }
 
     public AgentRunResponse addStepLog(String runId, AgentStepLogCreateRequest request) {
-        AgentRun agentRun = findAgentRun(runId);
+        requireNotBlank(request.stepName(), "stepName");
+        requireNotBlank(request.toolName(), "toolName");
+        if (request.status() == null) {
+            throw new InvalidAgentRunRequestException("status must not be null");
+        }
+        findAgentRun(runId);
         toolRegistryService.getTool(request.toolName());
 
-        List<AgentStepLog> stepLogs = new ArrayList<>(agentRun.stepLogs());
-        stepLogs.add(new AgentStepLog(
+        AgentStepLog stepLog = new AgentStepLog(
                 request.stepName(),
                 request.input(),
                 request.output(),
@@ -94,20 +107,33 @@ public class AgentRunService {
                 request.status(),
                 request.retry(),
                 Instant.now()
-        ));
-
-        AgentRun updated = new AgentRun(
-                agentRun.runId(),
-                agentRun.issueId(),
-                agentRun.issueTitle(),
-                agentRun.status(),
-                List.copyOf(stepLogs),
-                agentRun.createdAt(),
-                Instant.now()
         );
-        agentRunStore.put(updated.runId(), updated);
+
+        // 갱신 함수 안에서는 현재 값에 로그 1건을 더한 새 값만 만든다.
+        AgentRun updated = agentRunStore.computeIfPresent(runId, (key, current) -> {
+            List<AgentStepLog> stepLogs = new ArrayList<>(current.stepLogs());
+            stepLogs.add(stepLog);
+            return new AgentRun(
+                    current.runId(),
+                    current.issueId(),
+                    current.issueTitle(),
+                    current.status(),
+                    List.copyOf(stepLogs),
+                    current.createdAt(),
+                    Instant.now()
+            );
+        });
+        if (updated == null) {
+            throw new AgentRunNotFoundException(runId);
+        }
 
         return toResponse(updated);
+    }
+
+    private void requireNotBlank(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new InvalidAgentRunRequestException(fieldName + " must not be blank");
+        }
     }
 
     private AgentRun findAgentRun(String runId) {
