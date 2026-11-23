@@ -28,7 +28,7 @@ Pull Request   검증된 변경분을 PR로 추적 → POST /pull-requests
 각 단계는 GitHub Actions와 저장소의 문서 산출물(`docs/tasks/`, `docs/design/` 등)을 중심으로 연결됩니다. 위 그림의 `POST` 호출은 연결 가능한 Spring 서버가 `SERVER_URL`로 설정된 경우에만 산출물 메타데이터를 서버의 인메모리 저장소에 등록하며, 등록에 실패해도 워크플로는 경고만 남기고 계속됩니다([GitHub Actions 설정](#github-actions-설정)). 현재 운영 중인 서버는 없으므로, API 흐름과 상태 전이는 로컬에서 Spring 서비스를 실행해 확인합니다([Deployment](#deployment)).
 
 AgentRun 도메인은 하나의 Issue 처리 과정을 `PLANNING → DESIGNING → IMPLEMENTING → TESTING → REVIEWING → PR_READY` 상태로 추적합니다.
-각 step의 입력, 출력, 사용 tool, 성공/실패, 재시도 여부를 API로 기록할 수 있게 해 LLM 기반 자동화 흐름의 추적 가능성과 디버깅 가능성을 높입니다. 현재 GitHub Actions 워크플로는 AgentRun API를 호출하지 않습니다.
+상태 전이와 각 step의 입력, 출력, 사용 tool, 성공/실패, 재시도 여부는 API 호출자가 직접 기록합니다. 서버가 Agent나 tool을 실행하면서 자동으로 남기는 기록이 아닙니다. 현재 GitHub Actions 워크플로는 AgentRun API를 호출하지 않습니다. AgentRun 데이터는 인메모리에 저장되며 서버를 재시작하면 사라집니다.
 
 ---
 
@@ -36,7 +36,8 @@ AgentRun 도메인은 하나의 Issue 처리 과정을 `PLANNING → DESIGNING �
 
 - GitHub Issue 기반 개발 자동화 흐름을 실험하기 위한 학습 프로젝트
 - Planner, Architect, Implementer, Reviewer, Pull Request 단계의 산출물 저장과 상태 추적 API 구현
-- AgentRun 상태 전이와 step log를 통해 실행 흐름, tool 입력/출력, 성공/실패 여부 추적
+- AgentRun 상태 전이와 step log를 API 호출자가 직접 기록해 실행 흐름, tool 입력/출력, 성공/실패 여부 추적 (현재 워크플로는 AgentRun API를 호출하지 않음)
+- Tool Registry는 tool 정의 목록만 제공하며 실제 tool을 실행하지 않음
 - 현재 저장소는 `ConcurrentHashMap` 기반 인메모리 저장소 사용
 - Spring AI `ToolCallback` 연동은 다음 단계 확장 대상으로 분리
 
@@ -283,12 +284,16 @@ PLANNING → DESIGNING → IMPLEMENTING → TESTING → REVIEWING → PR_READY
 ```
 
 AgentRun은 Issue 하나를 처리하는 전체 실행 단위입니다.
-기존 Task, Design, Implementation, Review, PullRequest 산출물을 실행 관점에서 묶고,
-각 단계에서 어떤 tool이 어떤 입력과 출력으로 호출되었는지 기록합니다.
+API 호출자가 상태 전이와 각 단계의 step log(단계 이름, 사용한 tool 이름, 입력과 출력, 성공/실패, 재시도 여부)를 직접 기록합니다.
+서버는 이 기록을 보관하고 상태 순서와 입력 값을 검증할 뿐, Agent나 tool을 실행하지 않습니다.
+현재 GitHub Actions 워크플로는 AgentRun API를 호출하지 않으며, 데이터는 인메모리에 저장되어 서버를 재시작하면 사라집니다.
 
 ### Tool Registry
 
-| Tool | 책임 |
+Tool Registry는 tool의 이름, 설명, 입력·출력 설명을 제공하는 정의 목록입니다(`GET /tools`).
+서버는 등록된 tool을 실행하지 않습니다. 아래 표는 각 tool이 맡을 역할을 적은 정의이며, step log를 추가할 때 `toolName`이 이 목록에 있는지만 확인합니다.
+
+| Tool | 정의된 역할 |
 |------|------|
 | RepositoryContextTool | README, build.gradle, 패키지 구조 조회 |
 | TaskDocumentTool | TASK 문서 생성 및 검증 |
@@ -298,8 +303,8 @@ AgentRun은 Issue 하나를 처리하는 전체 실행 단위입니다.
 | ReviewTool | diff와 테스트 결과 기반 리뷰 생성 |
 | PullRequestTool | PR 제목/본문 생성 |
 
-현재는 커스텀 Tool Registry로 tool capability를 명시적으로 분리했습니다.
-Spring AI 적용 시에는 각 tool을 `ToolCallback` bean으로 노출하고, `ChatClient`와 `ToolCallingAdvisor`를 통해 LLM의 tool calling loop와 연결할 수 있도록 확장할 계획입니다.
+현재는 커스텀 Tool Registry로 tool 정의를 명시적으로 분리했습니다.
+실제 tool 실행과 LLM 연동은 구현되어 있지 않습니다. Spring AI 적용 시에는 각 tool을 `ToolCallback` bean으로 노출하고, `ChatClient`와 `ToolCallingAdvisor`를 통해 LLM의 tool calling loop와 연결할 수 있도록 확장할 계획입니다.
 
 ### Gate System
 
