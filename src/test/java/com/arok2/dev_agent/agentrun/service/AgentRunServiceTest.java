@@ -7,10 +7,14 @@ import com.arok2.dev_agent.agentrun.dto.AgentRunResponse;
 import com.arok2.dev_agent.agentrun.dto.AgentStepLogCreateRequest;
 import com.arok2.dev_agent.common.exception.AgentRunAlreadyExistsException;
 import com.arok2.dev_agent.common.exception.AgentRunNotFoundException;
+import com.arok2.dev_agent.common.exception.InvalidAgentRunRequestException;
 import com.arok2.dev_agent.common.exception.InvalidAgentRunStatusTransitionException;
 import com.arok2.dev_agent.common.exception.ToolNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 
@@ -128,5 +132,148 @@ class AgentRunServiceTest {
         )))
                 .isInstanceOf(ToolNotFoundException.class)
                 .hasMessageContaining("UnknownTool");
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   "})
+    void createAgentRun_runId가_비어있으면_예외_저장안함(String runId) {
+        assertThatThrownBy(() -> agentRunService.createAgentRun(new AgentRunCreateRequest(runId, "ISSUE-1", "제목")))
+                .isInstanceOf(InvalidAgentRunRequestException.class)
+                .hasMessage("runId must not be blank");
+
+        assertThat(agentRunService.getAllAgentRuns()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   "})
+    void createAgentRun_issueId가_비어있으면_예외_저장안함(String issueId) {
+        assertThatThrownBy(() -> agentRunService.createAgentRun(new AgentRunCreateRequest("RUN-001", issueId, "제목")))
+                .isInstanceOf(InvalidAgentRunRequestException.class)
+                .hasMessage("issueId must not be blank");
+
+        assertThat(agentRunService.getAllAgentRuns()).isEmpty();
+    }
+
+    @Test
+    void createAgentRun_issueTitle_없어도_생성() {
+        AgentRunResponse response = agentRunService.createAgentRun(new AgentRunCreateRequest("RUN-001", "ISSUE-1", null));
+
+        assertThat(response.issueTitle()).isNull();
+        assertThat(agentRunService.getAllAgentRuns()).hasSize(1);
+    }
+
+    @Test
+    void createAgentRun_이미있는_runId라도_입력오류가_먼저_기존값_유지() {
+        agentRunService.createAgentRun(new AgentRunCreateRequest("RUN-001", "ISSUE-1", "원래 제목"));
+
+        assertThatThrownBy(() -> agentRunService.createAgentRun(new AgentRunCreateRequest("RUN-001", "  ", "새 제목")))
+                .isInstanceOf(InvalidAgentRunRequestException.class);
+
+        AgentRunResponse stored = agentRunService.getAgentRun("RUN-001");
+        assertThat(stored.issueId()).isEqualTo("ISSUE-1");
+        assertThat(stored.issueTitle()).isEqualTo("원래 제목");
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   "})
+    void addStepLog_stepName이_비어있으면_예외_저장안함(String stepName) {
+        createRun("RUN-001");
+
+        assertThatThrownBy(() -> agentRunService.addStepLog("RUN-001",
+                stepRequest(stepName, "TaskDocumentTool", AgentStepStatus.SUCCESS)))
+                .isInstanceOf(InvalidAgentRunRequestException.class)
+                .hasMessage("stepName must not be blank");
+
+        assertThat(agentRunService.getAgentRun("RUN-001").stepLogs()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   "})
+    void addStepLog_toolName이_비어있으면_예외_저장안함(String toolName) {
+        createRun("RUN-001");
+
+        assertThatThrownBy(() -> agentRunService.addStepLog("RUN-001",
+                stepRequest("step", toolName, AgentStepStatus.SUCCESS)))
+                .isInstanceOf(InvalidAgentRunRequestException.class)
+                .hasMessage("toolName must not be blank");
+
+        assertThat(agentRunService.getAgentRun("RUN-001").stepLogs()).isEmpty();
+    }
+
+    @Test
+    void addStepLog_status가_null이면_예외_저장안함() {
+        createRun("RUN-001");
+
+        assertThatThrownBy(() -> agentRunService.addStepLog("RUN-001",
+                stepRequest("step", "TaskDocumentTool", null)))
+                .isInstanceOf(InvalidAgentRunRequestException.class)
+                .hasMessage("status must not be null");
+
+        assertThat(agentRunService.getAgentRun("RUN-001").stepLogs()).isEmpty();
+    }
+
+    // 오류 우선순위 (DESIGN-021 Implementation Guide 4-1)
+
+    @Test
+    void advanceStatus_없는_run과_null_nextStatus는_run없음이_우선() {
+        assertThatThrownBy(() -> agentRunService.advanceStatus("RUN-404", null))
+                .isInstanceOf(AgentRunNotFoundException.class);
+    }
+
+    @Test
+    void advanceStatus_없는_run과_건너뛰는_전이는_run없음이_우선() {
+        assertThatThrownBy(() -> agentRunService.advanceStatus("RUN-404", AgentRunStatus.TESTING))
+                .isInstanceOf(AgentRunNotFoundException.class);
+    }
+
+    @Test
+    void addStepLog_없는_run과_미등록_tool은_run없음이_우선() {
+        assertThatThrownBy(() -> agentRunService.addStepLog("RUN-404",
+                stepRequest("step", "UnknownTool", AgentStepStatus.SUCCESS)))
+                .isInstanceOf(AgentRunNotFoundException.class);
+    }
+
+    @Test
+    void addStepLog_없는_run이라도_입력오류가_우선() {
+        assertThatThrownBy(() -> agentRunService.addStepLog("RUN-404",
+                stepRequest("step", null, AgentStepStatus.SUCCESS)))
+                .isInstanceOf(InvalidAgentRunRequestException.class);
+        assertThatThrownBy(() -> agentRunService.addStepLog("RUN-404",
+                stepRequest("step", "TaskDocumentTool", null)))
+                .isInstanceOf(InvalidAgentRunRequestException.class);
+    }
+
+    @Test
+    void addStepLog_입력오류가_미등록_tool보다_우선() {
+        createRun("RUN-001");
+
+        assertThatThrownBy(() -> agentRunService.addStepLog("RUN-001",
+                stepRequest("   ", "UnknownTool", AgentStepStatus.SUCCESS)))
+                .isInstanceOf(InvalidAgentRunRequestException.class);
+    }
+
+    @Test
+    void advanceStatus_실패한_전이는_step_log와_상태를_바꾸지_않음() {
+        createRun("RUN-001");
+        agentRunService.addStepLog("RUN-001", stepRequest("step", "TaskDocumentTool", AgentStepStatus.SUCCESS));
+
+        assertThatThrownBy(() -> agentRunService.advanceStatus("RUN-001", AgentRunStatus.TESTING))
+                .isInstanceOf(InvalidAgentRunStatusTransitionException.class);
+
+        AgentRunResponse stored = agentRunService.getAgentRun("RUN-001");
+        assertThat(stored.status()).isEqualTo(AgentRunStatus.PLANNING);
+        assertThat(stored.stepLogs()).hasSize(1);
+    }
+
+    private void createRun(String runId) {
+        agentRunService.createAgentRun(new AgentRunCreateRequest(runId, "ISSUE-1", "AgentRun 추가"));
+    }
+
+    private AgentStepLogCreateRequest stepRequest(String stepName, String toolName, AgentStepStatus status) {
+        return new AgentStepLogCreateRequest(stepName, "input", "output", toolName, status, false);
     }
 }
