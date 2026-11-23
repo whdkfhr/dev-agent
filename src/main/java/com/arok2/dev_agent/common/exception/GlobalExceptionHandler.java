@@ -93,6 +93,12 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("INVALID_AGENT_RUN_STATUS_TRANSITION", e.getMessage()));
     }
 
+    @ExceptionHandler(InvalidAgentRunRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidAgentRunRequest(InvalidAgentRunRequestException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse("INVALID_AGENT_RUN_REQUEST", e.getMessage()));
+    }
+
     @ExceptionHandler(ToolNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleToolNotFound(ToolNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
