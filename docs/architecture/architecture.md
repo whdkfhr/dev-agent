@@ -125,16 +125,21 @@ GitHub = 상태 저장소, Label = 상태, MD 파일 = 계약, PR = 실행 결�
 ## AgentRun Execution Tracking
 
 AgentRun은 하나의 GitHub Issue 처리 실행을 나타내는 애플리케이션 도메인입니다.
-GitHub Label 기반 외부 상태와 별개로 서버 내부에서 Agent pipeline 진행 상태와 Tool Use 로그를 추적합니다.
+GitHub Label 기반 외부 상태와 별개로, API 호출자가 기록한 Agent pipeline 진행 상태와 step log를 서버에 보관합니다.
+
+- 상태 전이와 step log는 API 호출자가 직접 기록합니다. 서버가 Agent나 tool을 실행하면서 자동으로 남기는 기록이 아닙니다.
+- 현재 GitHub Actions 워크플로는 AgentRun API를 호출하지 않습니다.
+- AgentRun 데이터는 인메모리(`ConcurrentHashMap`)에 저장되며 서버를 재시작하면 사라집니다.
 
 ```
 PLANNING → DESIGNING → IMPLEMENTING → TESTING → REVIEWING → PR_READY
 ```
 
-각 Agent step은 다음 정보를 기록합니다.
+호출자는 step마다 다음 정보를 기록합니다. 기록 시각(createdAt)은 서버가 넣습니다.
 
 | Field    | 의미 |
 |----------|------|
+| stepName | step 이름 |
 | input    | Agent 또는 tool 입력 |
 | output   | Agent 또는 tool 출력 |
 | toolName | 사용한 tool 이름 |
@@ -143,9 +148,10 @@ PLANNING → DESIGNING → IMPLEMENTING → TESTING → REVIEWING → PR_READY
 
 ## Tool Registry
 
-Agent가 호출 가능한 tool capability는 Tool Registry로 분리합니다.
+Tool Registry는 Agent가 사용할 tool의 이름, 설명, 입력·출력 설명을 제공하는 정의 목록입니다(`GET /tools`).
+서버는 등록된 tool을 실행하지 않습니다. 아래 표는 각 tool에 정의된 역할이며, step log를 추가할 때 `toolName`이 목록에 있는지만 확인합니다.
 
-| Tool | Responsibility |
+| Tool | Defined role |
 |------|----------------|
 | RepositoryContextTool | README, build.gradle, 패키지 구조 조회 |
 | TaskDocumentTool | TASK 문서 생성 및 검증 |
@@ -155,9 +161,9 @@ Agent가 호출 가능한 tool capability는 Tool Registry로 분리합니다.
 | ReviewTool | diff와 테스트 결과 기반 리뷰 생성 |
 | PullRequestTool | PR 제목/본문 생성 |
 
-현재 구현은 커스텀 Tool Registry를 사용합니다.
-Spring AI 적용 시 Tool Registry의 각 항목을 ToolCallback으로 노출하고,
-ChatClient와 ToolCallingAdvisor를 통해 LLM tool calling loop에 연결합니다.
+현재 구현은 커스텀 Tool Registry를 사용하며, 실제 tool 실행과 LLM 연동은 구현되어 있지 않습니다.
+향후 Spring AI를 적용하면 Tool Registry의 각 항목을 ToolCallback으로 노출하고,
+ChatClient와 ToolCallingAdvisor를 통해 LLM tool calling loop에 연결할 계획입니다.
 
 ## GitHub Actions File Structure
 
