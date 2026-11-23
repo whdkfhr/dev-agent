@@ -256,6 +256,11 @@ Spring 서비스의 API입니다. 현재 운영 배포가 없으므로 로컬에
 | GET | `/tools` | Agent Tool Registry 조회 |
 | GET | `/tools/{toolName}` | Agent Tool 단건 조회 |
 
+AgentRun API 입력 규칙
+- `POST /agent-runs`: `runId`와 `issueId`는 필수입니다. 없거나 `null`, 빈 문자열, 공백뿐이면 400 `INVALID_AGENT_RUN_REQUEST`를 반환하고 저장하지 않습니다. `issueTitle`은 선택입니다.
+- `POST /agent-runs/{runId}/steps`: `stepName`과 `toolName`은 같은 규칙으로 필수이고, `status`가 없거나 `null`이면 400 `INVALID_AGENT_RUN_REQUEST`입니다. 입력 검증이 run 존재 확인보다 먼저이므로, 존재하지 않는 run에 필수 값이 빠진 요청도 400입니다.
+- 같은 `runId`에 대한 생성, 상태 전이, step log 추가는 단일 인스턴스 안에서 원자적으로 처리됩니다.
+
 ---
 
 ## Agent System
@@ -328,7 +333,7 @@ Spring 서비스 기준입니다.
 - 서비스 계층 테스트로 산출물 저장, 중복 방지, 조회 실패, 상태 전이를 검증합니다.
 - 컨트롤러 테스트로 API 요청/응답 계약과 예외 처리를 확인합니다.
 - E2E 테스트로 Task, Design, Implementation, Review, PullRequest 흐름을 한 번에 검증합니다.
-- 현재 테스트 파일은 18개이며, AgentRun 상태 전이와 Tool Registry 조회 테스트를 포함합니다.
+- 현재 테스트 파일은 19개이며, AgentRun 상태 전이, 입력 검증, 동시성 회귀 테스트와 Tool Registry 조회 테스트를 포함합니다.
 
 로그 분석 서비스는 pytest로 별도 검증합니다(74 passed). [테스트와 검증 결과](#테스트와-검증-결과)를 봅니다.
 
